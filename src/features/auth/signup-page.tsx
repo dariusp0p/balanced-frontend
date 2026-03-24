@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 
 export function SignupPage() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ export function SignupPage() {
         <h1 className="text-2xl font-semibold text-gray-900 mb-6 text-center">
           Create Account
         </h1>
-        
+
         <form onSubmit={handleSignUp} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm text-gray-700">
@@ -95,7 +95,10 @@ export function SignupPage() {
           <div className="text-center pt-4">
             <p className="text-sm text-gray-600">
               Already have an account?{" "}
-              <Link to="/" className="text-[#E89B7E] hover:underline font-medium">
+              <Link
+                to="/"
+                className="text-[#E89B7E] hover:underline font-medium"
+              >
                 Sign in
               </Link>
             </p>

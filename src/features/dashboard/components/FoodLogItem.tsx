@@ -10,13 +10,21 @@ interface FoodLogItemProps {
   fats: number;
 }
 
-export function FoodLogItem({ id, name, time, calories, protein, carbs, fats }: FoodLogItemProps) {
+export function FoodLogItem({
+  id,
+  name,
+  time,
+  calories,
+  protein,
+  carbs,
+  fats,
+}: FoodLogItemProps) {
   return (
     <Link to={`/food/${id}`}>
       <div className="bg-white rounded-lg p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
         {/* Image placeholder */}
         <div className="w-16 h-16 rounded-full bg-gray-200 flex-shrink-0" />
-        
+
         {/* Content */}
         <div className="flex-1">
           <div className="flex items-start justify-between mb-2">
@@ -24,9 +32,9 @@ export function FoodLogItem({ id, name, time, calories, protein, carbs, fats }: 
               <h3 className="font-medium text-gray-900">{name}</h3>
               <p className="text-sm text-gray-500">{time}</p>
             </div>
-            <div className="text-[#E89B7E] font-medium">{calories} cals</div>
+            <div className="text-orange font-medium">{calories} cals</div>
           </div>
-          
+
           {/* Macros */}
           <div className="flex gap-4 text-xs">
             <div>

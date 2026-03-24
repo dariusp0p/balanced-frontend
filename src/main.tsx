@@ -2,9 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles/tailwind.css";
+import { FoodLogProvider } from "./features/food/FoodLogContext";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <FoodLogProvider>
+      <App />
+    </FoodLogProvider>
   </React.StrictMode>,
 );

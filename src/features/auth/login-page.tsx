@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export function LoginPage() {
         <h1 className="text-2xl font-semibold text-gray-900 mb-6 text-center">
           Welcome Back
         </h1>
-        
+
         <form onSubmit={handleSignIn} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm text-gray-700">
@@ -68,7 +68,10 @@ export function LoginPage() {
           <div className="text-center pt-4 border-t">
             <p className="text-sm text-gray-600">
               Don't have an account?{" "}
-              <Link to="/signup" className="text-[#E89B7E] hover:underline font-medium">
+              <Link
+                to="/signup"
+                className="text-[#E89B7E] hover:underline font-medium"
+              >
                 Sign up
               </Link>
             </p>

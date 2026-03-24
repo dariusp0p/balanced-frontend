@@ -1,7 +1,8 @@
 import { createBrowserRouter } from "react-router";
-import { LoginPage } from "./components/login-page";
-import { SignupPage } from "./components/signup-page";
-import { DashboardPage } from "./components/dashboard-page";
+import { LoginPage } from "./features/auth/login-page";
+import { SignupPage } from "./features/auth/signup-page";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { LogFoodPage } from "./features/food/LogFoodPage";
 import { FoodDetailPage } from "./components/food-detail-page";
 import { CameraCapture } from "./components/camera-capture";
 
@@ -25,5 +26,9 @@ export const router = createBrowserRouter([
   {
     path: "/food/:id",
     Component: FoodDetailPage,
+  },
+  {
+    path: "/log-food",
+    Component: LogFoodPage,
   },
 ]);
