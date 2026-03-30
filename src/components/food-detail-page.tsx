@@ -78,6 +78,7 @@ export function FoodDetailPage() {
               <Edit2 className="w-5 h-5" />
             </button>
             <button
+              title="Delete"
               onClick={handleDelete}
               className="p-2 hover:bg-white/10 rounded transition-colors"
             >
