@@ -1,11 +1,21 @@
-import { useNavigate } from "react-router";
-import { useState } from "react";
+import { useNavigate, useLocation } from "react-router";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 
 import { useFoodLogs } from "./FoodLogContext";
+import { foodLogSchema } from "./foodLogValidation";
 
 export function LogFoodPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const editId = params.get("edit");
+  const { foodLogs, addFoodLog, updateFoodLog } = useFoodLogs();
+  const foodToEdit = editId
+    ? foodLogs.find((log) => log.id === Number(editId))
+    : null;
+
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     date: format(new Date(), "yyyy-MM-dd"),
@@ -16,15 +26,28 @@ export function LogFoodPage() {
     fats: "",
   });
 
+  // Pre-populate form if editing
+  useEffect(() => {
+    if (foodToEdit) {
+      setForm({
+        name: foodToEdit.name,
+        date: foodToEdit.date,
+        time: foodToEdit.time,
+        calories: String(foodToEdit.calories),
+        protein: String(foodToEdit.protein),
+        carbs: String(foodToEdit.carbs),
+        fats: String(foodToEdit.fats),
+      });
+    }
+  }, [foodToEdit]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const { addFoodLog } = useFoodLogs();
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addFoodLog({
+    const parsed = foodLogSchema.safeParse({
       name: form.name,
       date: form.date,
       time: form.time,
@@ -33,6 +56,15 @@ export function LogFoodPage() {
       carbs: Number(form.carbs),
       fats: Number(form.fats),
     });
+    if (!parsed.success) {
+      setError(parsed.error.issues.map((issue) => issue.message).join(", "));
+      return;
+    }
+    if (foodToEdit) {
+      updateFoodLog(foodToEdit.id, parsed.data);
+    } else {
+      addFoodLog(parsed.data);
+    }
     navigate("/dashboard");
   };
 
@@ -118,6 +150,11 @@ export function LogFoodPage() {
               onChange={handleChange}
               required
             />
+            {error && (
+              <div className="mb-2 text-red-500 text-sm font-medium">
+                {error}
+              </div>
+            )}
             <button
               type="submit"
               className="w-full bg-orange text-white py-2 rounded font-semibold"

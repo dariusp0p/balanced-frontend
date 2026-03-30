@@ -14,6 +14,8 @@ export type FoodLog = {
 type FoodLogContextType = {
   foodLogs: FoodLog[];
   addFoodLog: (log: Omit<FoodLog, "id">) => void;
+  updateFoodLog: (id: number, updated: Omit<FoodLog, "id">) => void;
+  deleteFoodLog: (id: number) => void;
 };
 
 const FoodLogContext = createContext<FoodLogContextType | undefined>(undefined);
@@ -75,8 +77,20 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
+  const updateFoodLog = (id: number, updated: Omit<FoodLog, "id">) => {
+    setFoodLogs((prev) =>
+      prev.map((log) => (log.id === id ? { ...log, ...updated } : log)),
+    );
+  };
+
+  const deleteFoodLog = (id: number) => {
+    setFoodLogs((prev) => prev.filter((log) => log.id !== id));
+  };
+
   return (
-    <FoodLogContext.Provider value={{ foodLogs, addFoodLog }}>
+    <FoodLogContext.Provider
+      value={{ foodLogs, addFoodLog, deleteFoodLog, updateFoodLog }}
+    >
       {children}
     </FoodLogContext.Provider>
   );

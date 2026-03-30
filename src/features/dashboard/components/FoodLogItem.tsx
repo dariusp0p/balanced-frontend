@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { Trash2 } from "lucide-react";
 
 interface FoodLogItemProps {
   id: number;
@@ -8,6 +9,7 @@ interface FoodLogItemProps {
   protein: number;
   carbs: number;
   fats: number;
+  onDelete: (id: number) => void;
 }
 
 export function FoodLogItem({
@@ -18,7 +20,15 @@ export function FoodLogItem({
   protein,
   carbs,
   fats,
+  onDelete,
 }: FoodLogItemProps) {
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation
+    if (window.confirm("Are you sure you want to delete this food log?")) {
+      onDelete(id);
+    }
+  };
+
   return (
     <Link to={`/food/${id}`}>
       <div className="bg-white rounded-lg p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
@@ -27,16 +37,13 @@ export function FoodLogItem({
 
         {/* Content */}
         <div className="flex-1">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <h3 className="font-medium text-gray-900">{name}</h3>
-              <p className="text-sm text-gray-500">{time}</p>
-            </div>
-            <div className="text-orange font-medium">{calories} cals</div>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="font-medium text-gray-900">{name}</h3>
+            <span className="text-orange font-medium">{calories} cals</span>
           </div>
-
+          <p className="text-sm text-gray-500">{time}</p>
           {/* Macros */}
-          <div className="flex gap-4 text-xs">
+          <div className="flex gap-4 text-xs mt-2">
             <div>
               <span className="font-medium text-gray-900">{protein}g</span>
               <span className="text-gray-400 ml-1">protein</span>
@@ -51,6 +58,13 @@ export function FoodLogItem({
             </div>
           </div>
         </div>
+        <button
+          onClick={handleDelete}
+          className="ml-2 p-2 rounded hover:bg-red-100 group"
+          title="Delete"
+        >
+          <Trash2 className="text-gray-400 group-hover:text-red-600 transition-colors" />
+        </button>
       </div>
     </Link>
   );

@@ -1,4 +1,5 @@
 import { FoodLogItem } from "./FoodLogItem";
+import { useFoodLogs } from "../../food/FoodLogContext";
 
 interface FoodLogsProps {
   foodLogs: Array<{
@@ -14,6 +15,8 @@ interface FoodLogsProps {
 }
 
 export function FoodLogs({ foodLogs, onAdd }: FoodLogsProps) {
+  const { deleteFoodLog } = useFoodLogs();
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6 md:mb-4 px-0 md:px-0">
@@ -24,9 +27,9 @@ export function FoodLogs({ foodLogs, onAdd }: FoodLogsProps) {
           add +
         </button>
       </div>
-      <div className="space-y-4 md:space-y-3">
+      <div className="space-y-4 md:space-y-3 display: flex flex-col gap-2">
         {foodLogs.map((log) => (
-          <FoodLogItem key={log.id} {...log} />
+          <FoodLogItem key={log.id} {...log} onDelete={deleteFoodLog} />
         ))}
       </div>
     </div>

@@ -11,7 +11,6 @@ import { useFoodLogs } from "../../features/food/FoodLogContext";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const [showAddModal, setShowAddModal] = useState(false);
 
   const streakDays = 12; // Mock streak data
 
@@ -47,7 +46,7 @@ export function DashboardPage() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm p-6 md:p-8">
+        <div className="p-6 md:p-8">
           <FoodLogs
             foodLogs={foodLogs}
             onAdd={() => navigate("/log-food?mode=manual")}
