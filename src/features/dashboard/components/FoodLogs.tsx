@@ -23,13 +23,24 @@ export function FoodLogs({ foodLogs, onAdd }: FoodLogsProps) {
         <h2 className="text-lg md:text-sm font-medium text-gray-600">
           today's logs
         </h2>
-        <button className="text-orange text-sm hover:underline" onClick={onAdd}>
+        <button
+          type="button"
+          className="text-orange text-sm hover:underline"
+          onClick={onAdd}
+        >
           add +
         </button>
       </div>
-      <div className="space-y-4 md:space-y-3 display: flex flex-col gap-2">
-        {foodLogs.map((log) => (
-          <FoodLogItem key={log.id} {...log} onDelete={deleteFoodLog} />
+
+      <div className="space-y-4 md:space-y-3 flex flex-col gap-2">
+        {foodLogs.map((log, idx) => (
+          <div
+            key={log.id}
+            className="animate-fade-in-up"
+            style={{ animationDelay: `${idx * 120}ms` }}
+          >
+            <FoodLogItem {...log} onDelete={deleteFoodLog} />
+          </div>
         ))}
       </div>
     </div>

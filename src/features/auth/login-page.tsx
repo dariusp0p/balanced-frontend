@@ -8,11 +8,20 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    // Navigate to dashboard (mock authentication)
-    navigate("/dashboard");
+
+    // mock auth
+    if (email === "newuser@example.com" && password === "password123") {
+      setError("");
+      localStorage.setItem("isAuthenticated", "true");
+      navigate("/dashboard");
+      return;
+    }
+
+    setError("Invalid email or password");
   };
 
   return (
@@ -29,11 +38,13 @@ export function LoginPage() {
             </Label>
             <Input
               id="email"
+              name="email"
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-white border border-gray-200"
+              required
             />
           </div>
 
@@ -43,13 +54,21 @@ export function LoginPage() {
             </Label>
             <Input
               id="password"
+              name="password"
               type="password"
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-white border border-gray-200"
+              required
             />
           </div>
+
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
 
           <Button
             type="submit"

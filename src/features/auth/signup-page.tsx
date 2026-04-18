@@ -10,10 +10,21 @@ export function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
 
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
-    // Navigate to dashboard (mock registration)
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    // mock registration
+    setError("");
+    localStorage.setItem("registeredUserEmail", email);
+    localStorage.setItem("registeredUserPassword", password);
+    localStorage.setItem("isAuthenticated", "true");
     navigate("/dashboard");
   };
 
@@ -31,6 +42,7 @@ export function SignupPage() {
             </Label>
             <Input
               id="name"
+              name="name"
               type="text"
               placeholder="Enter your name"
               value={name}
@@ -46,6 +58,7 @@ export function SignupPage() {
             </Label>
             <Input
               id="email"
+              name="email"
               type="email"
               placeholder="Enter your email"
               value={email}
@@ -61,6 +74,7 @@ export function SignupPage() {
             </Label>
             <Input
               id="password"
+              name="password"
               type="password"
               placeholder="Create a password"
               value={password}
@@ -76,6 +90,7 @@ export function SignupPage() {
             </Label>
             <Input
               id="confirmPassword"
+              name="confirmPassword"
               type="password"
               placeholder="Confirm your password"
               value={confirmPassword}
@@ -84,6 +99,12 @@ export function SignupPage() {
               required
             />
           </div>
+
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
 
           <Button
             type="submit"

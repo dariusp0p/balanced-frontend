@@ -28,6 +28,10 @@ export const router = createBrowserRouter([
     Component: FoodDetailPage,
   },
   {
+    path: "/food/add",
+    Component: LogFoodPage,
+  },
+  {
     path: "/log-food",
     Component: LogFoodPage,
   },
