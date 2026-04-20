@@ -206,6 +206,15 @@ export function DashboardPage() {
           </div>
         </div>
         <div className="p-6 md:p-8">
+          <div className="mb-4">
+            <button
+              type="button"
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              onClick={() => navigate("/infinite-food-logs")}
+            >
+              Open Infinite Scroll Demo
+            </button>
+          </div>
           {loading ? (
             <div className="text-center text-gray-500">Loading...</div>
           ) : (

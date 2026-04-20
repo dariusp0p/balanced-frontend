@@ -6,10 +6,14 @@ const CACHE_KEY = "balanced.foodLogs.cache.v1";
 const CACHE_BY_DATE_KEY = "balanced.foodLogs.cacheByDate.v1";
 const QUEUE_KEY = "balanced.foodLogs.queue.v1";
 const TEMP_ID_KEY = "balanced.foodLogs.tempId.v1";
+const LOG_GROUP_CACHE_KEY = "balanced.logGroups.cache.v1";
+const LOG_GROUP_QUEUE_KEY = "balanced.logGroups.queue.v1";
+const LOG_GROUP_TEMP_ID_KEY = "balanced.logGroups.tempId.v1";
 const API_STATE_EVENT = "balanced:foodlog-api-state-change";
 let backendReachable = true;
 let authRequired = false;
 let syncFoodLogQueuePromise: Promise<void> | null = null;
+let syncLogGroupQueuePromise: Promise<void> | null = null;
 let supportsClientMutationHeader = true;
 const GRAPHQL_ENDPOINT = "/graphql";
 
@@ -42,6 +46,14 @@ export type LogGroupEntity = LogGroupPayload & {
   id: number;
 };
 
+export type FoodLogPageEntity = {
+  content: FoodLogEntity[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 type OfflineOp =
   | {
       type: "add";
@@ -53,6 +65,21 @@ type OfflineOp =
       type: "update";
       id: number;
       payload: FoodLogPayload;
+      clientMutationId: string;
+    }
+  | { type: "delete"; id: number; clientMutationId: string };
+
+type LogGroupOfflineOp =
+  | {
+      type: "add";
+      tempId: number;
+      payload: LogGroupPayload;
+      clientMutationId: string;
+    }
+  | {
+      type: "update";
+      id: number;
+      payload: LogGroupPayload;
       clientMutationId: string;
     }
   | { type: "delete"; id: number; clientMutationId: string };
@@ -137,6 +164,22 @@ function readQueue() {
   return readJson<OfflineOp[]>(QUEUE_KEY, []);
 }
 
+function readLogGroupCache() {
+  return readJson<LogGroupEntity[]>(LOG_GROUP_CACHE_KEY, []);
+}
+
+function writeLogGroupCache(groups: LogGroupEntity[]) {
+  writeJson(LOG_GROUP_CACHE_KEY, groups);
+}
+
+function readLogGroupQueue() {
+  return readJson<LogGroupOfflineOp[]>(LOG_GROUP_QUEUE_KEY, []);
+}
+
+function writeLogGroupQueue(queue: LogGroupOfflineOp[]) {
+  writeJson(LOG_GROUP_QUEUE_KEY, queue);
+}
+
 function readCacheByDate() {
   return readJson<Record<string, FoodLogEntity[]>>(CACHE_BY_DATE_KEY, {});
 }
@@ -157,6 +200,13 @@ function readDateCache(date: string) {
 
 function writeQueue(queue: OfflineOp[]) {
   writeJson(QUEUE_KEY, queue);
+}
+
+function nextLogGroupTempId() {
+  const current = Number(localStorage.getItem(LOG_GROUP_TEMP_ID_KEY) || "-1");
+  const next = current - 1;
+  localStorage.setItem(LOG_GROUP_TEMP_ID_KEY, String(next));
+  return current;
 }
 
 function isNavigatorOnline() {
@@ -278,6 +328,77 @@ function replaceIdInCache(oldId: number, newItem: FoodLogEntity) {
   writeCache(cache);
 }
 
+function upsertLogGroupInCache(group: LogGroupEntity) {
+  const cache = readLogGroupCache();
+  const idx = cache.findIndex((it) => it.id === group.id);
+  if (idx >= 0) cache[idx] = group;
+  else cache.push(group);
+  writeLogGroupCache(cache);
+}
+
+function removeLogGroupFromCache(id: number) {
+  writeLogGroupCache(readLogGroupCache().filter((it) => it.id !== id));
+}
+
+function replaceLogGroupIdInCache(oldId: number, newItem: LogGroupEntity) {
+  const cache = readLogGroupCache().filter((it) => it.id !== oldId);
+  cache.push(newItem);
+  writeLogGroupCache(cache);
+}
+
+function remapFoodLogGroupIdReferences(oldGroupId: number, newGroupId: number) {
+  const logs = readCache().map((log) =>
+    log.logGroupId === oldGroupId ? { ...log, logGroupId: newGroupId } : log,
+  );
+  writeCache(logs);
+
+  const cacheByDate = readCacheByDate();
+  Object.keys(cacheByDate).forEach((date) => {
+    cacheByDate[date] = cacheByDate[date].map((log) =>
+      log.logGroupId === oldGroupId ? { ...log, logGroupId: newGroupId } : log,
+    );
+  });
+  writeCacheByDate(cacheByDate);
+
+  const queue = readQueue().map((op) => {
+    if (op.type === "add" || op.type === "update") {
+      if (op.payload.logGroupId === oldGroupId) {
+        return {
+          ...op,
+          payload: { ...op.payload, logGroupId: newGroupId },
+        };
+      }
+    }
+    return op;
+  });
+  writeQueue(queue);
+}
+
+function removeLogsForDeletedGroup(groupId: number) {
+  const logsToDelete = readCache().filter((log) => log.logGroupId === groupId);
+  const idsToDelete = new Set(logsToDelete.map((log) => log.id));
+
+  if (idsToDelete.size === 0) return;
+
+  writeCache(readCache().filter((log) => !idsToDelete.has(log.id)));
+
+  const cacheByDate = readCacheByDate();
+  Object.keys(cacheByDate).forEach((date) => {
+    cacheByDate[date] = cacheByDate[date].filter(
+      (log) => !idsToDelete.has(log.id),
+    );
+  });
+  writeCacheByDate(cacheByDate);
+
+  const queue = readQueue().filter((op) => {
+    if (op.type === "add") {
+      return !idsToDelete.has(op.tempId);
+    }
+    return !idsToDelete.has(op.id);
+  });
+  writeQueue(queue);
+}
+
 async function fetchFoodLogsOnline(): Promise<FoodLogEntity[]> {
   const res = await fetchWithOptionalMutationHeader(
     `${ensureBackendUrl()}/api/food-logs?page=0&size=100`,
@@ -287,6 +408,35 @@ async function fetchFoodLogsOnline(): Promise<FoodLogEntity[]> {
   setBackendReachable(true);
   setAuthRequired(false);
   return data.content || [];
+}
+
+export async function fetchFoodLogsPageApi(
+  page: number,
+  size: number,
+): Promise<FoodLogPageEntity> {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/food-logs?${params.toString()}`,
+  );
+  if (!res.ok) {
+    throw createHttpError(res.status, "Failed to fetch paged food logs");
+  }
+
+  const data = await res.json();
+  setBackendReachable(true);
+  setAuthRequired(false);
+
+  return {
+    content: (data.content || []) as FoodLogEntity[],
+    page: Number(data.page ?? page),
+    size: Number(data.size ?? size),
+    totalElements: Number(data.totalElements ?? 0),
+    totalPages: Number(data.totalPages ?? 0),
+  };
 }
 
 async function fetchFoodLogsByDateOnline(
@@ -439,6 +589,231 @@ async function deleteFoodLogOnline(id: number, clientMutationId?: string) {
   setAuthRequired(false);
 }
 
+async function fetchLogGroupsOnline(): Promise<LogGroupEntity[]> {
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/log-groups?page=0&size=100`,
+  );
+  if (!res.ok) {
+    throw createHttpError(res.status, "Failed to fetch log groups");
+  }
+  const data = await res.json();
+  setBackendReachable(true);
+  setAuthRequired(false);
+  return data.content || [];
+}
+
+async function addLogGroupOnline(
+  payload: LogGroupPayload,
+  clientMutationId?: string,
+): Promise<LogGroupEntity> {
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/log-groups`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      clientMutationId,
+    },
+  );
+  if (!res.ok) {
+    throw createHttpError(res.status, "Failed to create log group");
+  }
+  const data = (await res.json()) as LogGroupEntity;
+  setBackendReachable(true);
+  setAuthRequired(false);
+  return data;
+}
+
+async function updateLogGroupOnline(
+  id: number,
+  payload: LogGroupPayload,
+  clientMutationId?: string,
+): Promise<LogGroupEntity> {
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/log-groups/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+      clientMutationId,
+    },
+  );
+  if (!res.ok) {
+    throw createHttpError(res.status, "Failed to update log group");
+  }
+  const data = (await res.json()) as LogGroupEntity;
+  setBackendReachable(true);
+  setAuthRequired(false);
+  return data;
+}
+
+async function deleteLogGroupOnline(id: number, clientMutationId?: string) {
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/log-groups/${id}`,
+    {
+      method: "DELETE",
+      clientMutationId,
+    },
+  );
+  if (!res.ok) {
+    throw createHttpError(res.status, "Failed to delete log group");
+  }
+  setBackendReachable(true);
+  setAuthRequired(false);
+}
+
+function enqueueLogGroup(op: LogGroupOfflineOp) {
+  const queue = readLogGroupQueue();
+
+  if (op.type === "delete" && op.id < 0) {
+    const nextQueue = queue.filter(
+      (q) =>
+        !(q.type === "add" && q.tempId === op.id) &&
+        !(q.type === "update" && q.id === op.id),
+    );
+    writeLogGroupQueue(nextQueue);
+    return;
+  }
+
+  if (op.type === "update") {
+    const idx = queue.findIndex((q) => q.type === "update" && q.id === op.id);
+    if (idx >= 0) {
+      queue[idx] = op;
+      writeLogGroupQueue(queue);
+      return;
+    }
+  }
+
+  queue.push(op);
+  writeLogGroupQueue(queue);
+}
+
+async function syncLogGroupQueue() {
+  if (syncLogGroupQueuePromise) {
+    await syncLogGroupQueuePromise;
+    return;
+  }
+
+  syncLogGroupQueuePromise = (async () => {
+    if (!isNavigatorOnline()) return;
+
+    let queue = readLogGroupQueue();
+    if (queue.length === 0) return;
+
+    for (let i = 0; i < queue.length; i += 1) {
+      const op = queue[i];
+
+      try {
+        if (op.type === "add") {
+          const created = await addLogGroupOnline(
+            op.payload,
+            op.clientMutationId,
+          );
+          replaceLogGroupIdInCache(op.tempId, created);
+          remapFoodLogGroupIdReferences(op.tempId, created.id);
+
+          queue = queue.map((queuedOp) => {
+            if (queuedOp.type === "update" && queuedOp.id === op.tempId) {
+              return { ...queuedOp, id: created.id };
+            }
+            if (queuedOp.type === "delete" && queuedOp.id === op.tempId) {
+              return { ...queuedOp, id: created.id };
+            }
+            return queuedOp;
+          });
+          writeLogGroupQueue(queue);
+        }
+
+        if (op.type === "update") {
+          if (op.id >= 0) {
+            const updated = await updateLogGroupOnline(
+              op.id,
+              op.payload,
+              op.clientMutationId,
+            );
+            upsertLogGroupInCache(updated);
+          }
+        }
+
+        if (op.type === "delete") {
+          if (op.id >= 0) {
+            await deleteLogGroupOnline(op.id, op.clientMutationId);
+          }
+          removeLogsForDeletedGroup(op.id);
+          removeLogGroupFromCache(op.id);
+        }
+
+        queue = queue.slice(1);
+        writeLogGroupQueue(queue);
+        i -= 1;
+      } catch (err) {
+        const status = getHttpStatus(err);
+
+        if (status === 404 && op.type === "delete") {
+          removeLogsForDeletedGroup(op.id);
+          removeLogGroupFromCache(op.id);
+          queue = queue.slice(1);
+          writeLogGroupQueue(queue);
+          i -= 1;
+          continue;
+        }
+
+        if (status === 404 && op.type === "update") {
+          try {
+            const recreated = await addLogGroupOnline(
+              op.payload,
+              op.clientMutationId,
+            );
+            upsertLogGroupInCache(recreated);
+
+            queue = queue.map((queuedOp) => {
+              if (queuedOp.type === "update" && queuedOp.id === op.id) {
+                return { ...queuedOp, id: recreated.id };
+              }
+              if (queuedOp.type === "delete" && queuedOp.id === op.id) {
+                return { ...queuedOp, id: recreated.id };
+              }
+              return queuedOp;
+            });
+
+            queue = queue.slice(1);
+            writeLogGroupQueue(queue);
+            i -= 1;
+            continue;
+          } catch (recreateErr) {
+            if (isRecoverableLocalError(recreateErr)) {
+              setBackendReachable(false);
+              setAuthRequired(isAuthError(recreateErr));
+              writeLogGroupQueue(queue);
+              return;
+            }
+            throw recreateErr;
+          }
+        }
+
+        if (isRecoverableLocalError(err)) {
+          setBackendReachable(false);
+          setAuthRequired(isAuthError(err));
+          writeLogGroupQueue(queue);
+          return;
+        }
+        throw err;
+      }
+    }
+
+    try {
+      const groups = await fetchLogGroupsOnline();
+      writeLogGroupCache(groups);
+    } catch {
+      // Keep local group cache if final refresh fails.
+    }
+  })();
+
+  try {
+    await syncLogGroupQueuePromise;
+  } finally {
+    syncLogGroupQueuePromise = null;
+  }
+}
+
 function enqueue(op: OfflineOp) {
   const queue = readQueue();
 
@@ -466,10 +841,12 @@ function enqueue(op: OfflineOp) {
 }
 
 export function getPendingFoodLogSyncCount() {
-  return readQueue().length;
+  return readQueue().length + readLogGroupQueue().length;
 }
 
 export async function syncFoodLogQueue() {
+  await syncLogGroupQueue();
+
   if (syncFoodLogQueuePromise) {
     await syncFoodLogQueuePromise;
     return;
@@ -756,63 +1133,82 @@ export async function stopFoodLogGenerator() {
 }
 
 export async function fetchLogGroupsApi() {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups?page=0&size=100`,
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to fetch log groups");
+  try {
+    await syncLogGroupQueue();
+    const groups = await fetchLogGroupsOnline();
+    writeLogGroupCache(groups);
+    return groups;
+  } catch (err) {
+    if (!isRecoverableLocalError(err)) throw err;
+    setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
+    return readLogGroupCache();
   }
-  const data = await res.json();
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return (data.content || []) as LogGroupEntity[];
 }
 
 export async function createLogGroupApi(payload: LogGroupPayload) {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to create log group");
+  const clientMutationId = createClientMutationId();
+
+  try {
+    await syncLogGroupQueue();
+    const created = await addLogGroupOnline(payload, clientMutationId);
+    upsertLogGroupInCache(created);
+    return created;
+  } catch (err) {
+    if (!isRecoverableLocalError(err)) throw err;
+    setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
+
+    const tempId = nextLogGroupTempId();
+    const tempGroup: LogGroupEntity = { id: tempId, ...payload };
+    upsertLogGroupInCache(tempGroup);
+    enqueueLogGroup({
+      type: "add",
+      tempId,
+      payload,
+      clientMutationId,
+    });
+    return tempGroup;
   }
-  const data = (await res.json()) as LogGroupEntity;
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data;
 }
 
 export async function updateLogGroupApi(id: number, payload: LogGroupPayload) {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups/${id}`,
-    {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    },
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to update log group");
+  const clientMutationId = createClientMutationId();
+
+  try {
+    await syncLogGroupQueue();
+    const updated = await updateLogGroupOnline(id, payload, clientMutationId);
+    upsertLogGroupInCache(updated);
+    return updated;
+  } catch (err) {
+    if (!isRecoverableLocalError(err)) throw err;
+    setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
+
+    const localUpdated: LogGroupEntity = { id, ...payload };
+    upsertLogGroupInCache(localUpdated);
+    enqueueLogGroup({ type: "update", id, payload, clientMutationId });
+    return localUpdated;
   }
-  const data = (await res.json()) as LogGroupEntity;
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data;
 }
 
 export async function deleteLogGroupApi(id: number) {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups/${id}`,
-    {
-      method: "DELETE",
-    },
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to delete log group");
+  const clientMutationId = createClientMutationId();
+
+  try {
+    await syncLogGroupQueue();
+    await deleteLogGroupOnline(id, clientMutationId);
+    removeLogsForDeletedGroup(id);
+    removeLogGroupFromCache(id);
+    return true;
+  } catch (err) {
+    if (!isRecoverableLocalError(err)) throw err;
+    setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
+
+    removeLogsForDeletedGroup(id);
+    removeLogGroupFromCache(id);
+    enqueueLogGroup({ type: "delete", id, clientMutationId });
+    return true;
   }
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return true;
 }
