@@ -3,9 +3,14 @@ const BACKEND_BASE_URL = (import.meta as any).env?.VITE_BACKEND_BASE_URL as
   | undefined;
 
 const CACHE_KEY = "balanced.foodLogs.cache.v1";
+const CACHE_BY_DATE_KEY = "balanced.foodLogs.cacheByDate.v1";
 const QUEUE_KEY = "balanced.foodLogs.queue.v1";
 const TEMP_ID_KEY = "balanced.foodLogs.tempId.v1";
+const API_STATE_EVENT = "balanced:foodlog-api-state-change";
 let backendReachable = true;
+let authRequired = false;
+let syncFoodLogQueuePromise: Promise<void> | null = null;
+let supportsClientMutationHeader = true;
 
 export type FoodLogPayload = {
   name: string;
@@ -41,8 +46,41 @@ function getAuthHeaders(clientMutationId?: string) {
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    ...(clientMutationId ? { "X-Client-Mutation-Id": clientMutationId } : {}),
+    ...(clientMutationId && supportsClientMutationHeader
+      ? { "X-Client-Mutation-Id": clientMutationId }
+      : {}),
   };
+}
+
+async function fetchWithOptionalMutationHeader(
+  url: string,
+  options: {
+    method?: "GET" | "POST" | "PUT" | "DELETE";
+    body?: string;
+    clientMutationId?: string;
+  } = {},
+) {
+  const { method = "GET", body, clientMutationId } = options;
+
+  const run = (withMutationHeader: boolean) =>
+    fetch(url, {
+      method,
+      headers: getAuthHeaders(withMutationHeader ? clientMutationId : undefined),
+      ...(typeof body !== "undefined" ? { body } : {}),
+    });
+
+  const shouldTryWithMutationHeader =
+    Boolean(clientMutationId) && supportsClientMutationHeader;
+
+  try {
+    return await run(shouldTryWithMutationHeader);
+  } catch (err) {
+    if (!shouldTryWithMutationHeader) throw err;
+
+    // Browser blocked the custom header in CORS preflight. Retry once without it.
+    supportsClientMutationHeader = false;
+    return await run(false);
+  }
 }
 
 function createClientMutationId() {
@@ -81,6 +119,24 @@ function readQueue() {
   return readJson<OfflineOp[]>(QUEUE_KEY, []);
 }
 
+function readCacheByDate() {
+  return readJson<Record<string, FoodLogEntity[]>>(CACHE_BY_DATE_KEY, {});
+}
+
+function writeCacheByDate(cacheByDate: Record<string, FoodLogEntity[]>) {
+  writeJson(CACHE_BY_DATE_KEY, cacheByDate);
+}
+
+function writeDateCache(date: string, logs: FoodLogEntity[]) {
+  const cacheByDate = readCacheByDate();
+  cacheByDate[date] = logs;
+  writeCacheByDate(cacheByDate);
+}
+
+function readDateCache(date: string) {
+  return readCacheByDate()[date] || [];
+}
+
 function writeQueue(queue: OfflineOp[]) {
   writeJson(QUEUE_KEY, queue);
 }
@@ -92,13 +148,47 @@ function isNavigatorOnline() {
 
 function isOfflineLikeError(err: unknown) {
   if (!err || typeof err !== "object") return false;
-  const message = "message" in err ? String(err.message) : "";
+  const message = "message" in err ? String(err.message).toLowerCase() : "";
   return (
     !isNavigatorOnline() ||
-    message.includes("Failed to fetch") ||
-    message.includes("NetworkError") ||
-    message.includes("Network request failed")
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network request failed") ||
+    message.includes("load failed") ||
+    message.includes("could not connect") ||
+    message.includes("access control")
   );
+}
+
+function createHttpError(status: number, message: string) {
+  const error = new Error(message) as Error & {
+    status?: number;
+    code?: string;
+  };
+  error.status = status;
+  if (status === 401 || status === 403) {
+    error.code = "AUTH_REQUIRED";
+  }
+  return error;
+}
+
+function isAuthError(err: unknown) {
+  if (!err || typeof err !== "object") return false;
+  const maybeStatus = "status" in err ? Number(err.status) : NaN;
+  const maybeCode = "code" in err ? String(err.code) : "";
+  return (
+    maybeStatus === 401 || maybeStatus === 403 || maybeCode === "AUTH_REQUIRED"
+  );
+}
+
+function isRecoverableLocalError(err: unknown) {
+  return isOfflineLikeError(err) || isAuthError(err);
+}
+
+function getHttpStatus(err: unknown) {
+  if (!err || typeof err !== "object") return undefined;
+  const status = "status" in err ? Number(err.status) : NaN;
+  return Number.isFinite(status) ? status : undefined;
 }
 
 function ensureBackendUrl() {
@@ -108,12 +198,41 @@ function ensureBackendUrl() {
   return BACKEND_BASE_URL;
 }
 
+function emitApiStateChange() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(API_STATE_EVENT));
+}
+
 function setBackendReachable(value: boolean) {
+  if (backendReachable === value) return;
   backendReachable = value;
+  emitApiStateChange();
+}
+
+function setAuthRequired(value: boolean) {
+  if (authRequired === value) return;
+  authRequired = value;
+  emitApiStateChange();
+}
+
+export function onFoodLogApiStateChange(listener: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handler = () => listener();
+  window.addEventListener(API_STATE_EVENT, handler);
+  return () => {
+    window.removeEventListener(API_STATE_EVENT, handler);
+  };
 }
 
 export function isFoodLogBackendReachable() {
   return backendReachable;
+}
+
+export function isFoodLogAuthRequired() {
+  return authRequired;
 }
 
 function nextTempId() {
@@ -142,15 +261,13 @@ function replaceIdInCache(oldId: number, newItem: FoodLogEntity) {
 }
 
 async function fetchFoodLogsOnline(): Promise<FoodLogEntity[]> {
-  const res = await fetch(
+  const res = await fetchWithOptionalMutationHeader(
     `${ensureBackendUrl()}/api/food-logs?page=0&size=100`,
-    {
-      headers: getAuthHeaders(),
-    },
   );
-  if (!res.ok) throw new Error("Failed to fetch food logs");
+  if (!res.ok) throw createHttpError(res.status, "Failed to fetch food logs");
   const data = await res.json();
   setBackendReachable(true);
+  setAuthRequired(false);
   return data.content || [];
 }
 
@@ -158,15 +275,15 @@ async function fetchFoodLogsByDateOnline(
   date: string,
 ): Promise<FoodLogEntity[]> {
   const params = new URLSearchParams({ date });
-  const res = await fetch(
+  const res = await fetchWithOptionalMutationHeader(
     `${ensureBackendUrl()}/api/food-logs/day?${params.toString()}`,
-    {
-      headers: getAuthHeaders(),
-    },
   );
-  if (!res.ok) throw new Error("Failed to fetch food logs for date");
+  if (!res.ok) {
+    throw createHttpError(res.status, "Failed to fetch food logs for date");
+  }
   const data = await res.json();
   setBackendReachable(true);
+  setAuthRequired(false);
   return data;
 }
 
@@ -174,14 +291,18 @@ async function addFoodLogOnline(
   log: FoodLogPayload,
   clientMutationId?: string,
 ): Promise<FoodLogEntity> {
-  const res = await fetch(`${ensureBackendUrl()}/api/food-logs`, {
-    method: "POST",
-    headers: getAuthHeaders(clientMutationId),
-    body: JSON.stringify(log),
-  });
-  if (!res.ok) throw new Error("Failed to add food log");
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/food-logs`,
+    {
+      method: "POST",
+      body: JSON.stringify(log),
+      clientMutationId,
+    },
+  );
+  if (!res.ok) throw createHttpError(res.status, "Failed to add food log");
   const data = await res.json();
   setBackendReachable(true);
+  setAuthRequired(false);
   return data;
 }
 
@@ -190,24 +311,32 @@ async function updateFoodLogOnline(
   log: FoodLogPayload,
   clientMutationId?: string,
 ): Promise<FoodLogEntity> {
-  const res = await fetch(`${ensureBackendUrl()}/api/food-logs/${id}`, {
-    method: "PUT",
-    headers: getAuthHeaders(clientMutationId),
-    body: JSON.stringify(log),
-  });
-  if (!res.ok) throw new Error("Failed to update food log");
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/food-logs/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(log),
+      clientMutationId,
+    },
+  );
+  if (!res.ok) throw createHttpError(res.status, "Failed to update food log");
   const data = await res.json();
   setBackendReachable(true);
+  setAuthRequired(false);
   return data;
 }
 
 async function deleteFoodLogOnline(id: number, clientMutationId?: string) {
-  const res = await fetch(`${ensureBackendUrl()}/api/food-logs/${id}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(clientMutationId),
-  });
-  if (!res.ok) throw new Error("Failed to delete food log");
+  const res = await fetchWithOptionalMutationHeader(
+    `${ensureBackendUrl()}/api/food-logs/${id}`,
+    {
+      method: "DELETE",
+      clientMutationId,
+    },
+  );
+  if (!res.ok) throw createHttpError(res.status, "Failed to delete food log");
   setBackendReachable(true);
+  setAuthRequired(false);
 }
 
 function enqueue(op: OfflineOp) {
@@ -241,67 +370,129 @@ export function getPendingFoodLogSyncCount() {
 }
 
 export async function syncFoodLogQueue() {
-  if (!isNavigatorOnline()) return;
+  if (syncFoodLogQueuePromise) {
+    await syncFoodLogQueuePromise;
+    return;
+  }
 
-  let queue = readQueue();
-  if (queue.length === 0) return;
+  syncFoodLogQueuePromise = (async () => {
+    if (!isNavigatorOnline()) return;
 
-  for (let i = 0; i < queue.length; i += 1) {
-    const op = queue[i];
+    let queue = readQueue();
+    if (queue.length === 0) return;
 
-    try {
-      if (op.type === "add") {
-        const created = await addFoodLogOnline(op.payload, op.clientMutationId);
-        replaceIdInCache(op.tempId, created);
+    for (let i = 0; i < queue.length; i += 1) {
+      const op = queue[i];
 
-        queue = queue.map((queuedOp) => {
-          if (queuedOp.type === "update" && queuedOp.id === op.tempId) {
-            return { ...queuedOp, id: created.id };
-          }
-          if (queuedOp.type === "delete" && queuedOp.id === op.tempId) {
-            return { ...queuedOp, id: created.id };
-          }
-          return queuedOp;
-        });
-        writeQueue(queue);
-      }
-
-      if (op.type === "update") {
-        if (op.id >= 0) {
-          const updated = await updateFoodLogOnline(
-            op.id,
+      try {
+        if (op.type === "add") {
+          const created = await addFoodLogOnline(
             op.payload,
             op.clientMutationId,
           );
-          upsertInCache(updated);
-        }
-      }
+          replaceIdInCache(op.tempId, created);
 
-      if (op.type === "delete") {
-        if (op.id >= 0) {
-          await deleteFoodLogOnline(op.id, op.clientMutationId);
+          queue = queue.map((queuedOp) => {
+            if (queuedOp.type === "update" && queuedOp.id === op.tempId) {
+              return { ...queuedOp, id: created.id };
+            }
+            if (queuedOp.type === "delete" && queuedOp.id === op.tempId) {
+              return { ...queuedOp, id: created.id };
+            }
+            return queuedOp;
+          });
+          writeQueue(queue);
         }
-        removeFromCache(op.id);
-      }
 
-      queue = queue.slice(1);
-      writeQueue(queue);
-      i -= 1;
-    } catch (err) {
-      if (isOfflineLikeError(err)) {
-        setBackendReachable(false);
+        if (op.type === "update") {
+          if (op.id >= 0) {
+            const updated = await updateFoodLogOnline(
+              op.id,
+              op.payload,
+              op.clientMutationId,
+            );
+            upsertInCache(updated);
+          }
+        }
+
+        if (op.type === "delete") {
+          if (op.id >= 0) {
+            await deleteFoodLogOnline(op.id, op.clientMutationId);
+          }
+          removeFromCache(op.id);
+        }
+
+        queue = queue.slice(1);
         writeQueue(queue);
-        return;
+        i -= 1;
+      } catch (err) {
+        const status = getHttpStatus(err);
+
+        // When backend restarts without persistence, old ids can disappear.
+        // Resolve these queue items instead of getting stuck in endless syncing.
+        if (status === 404 && op.type === "delete") {
+          removeFromCache(op.id);
+          queue = queue.slice(1);
+          writeQueue(queue);
+          i -= 1;
+          continue;
+        }
+
+        if (status === 404 && op.type === "update") {
+          try {
+            const recreated = await addFoodLogOnline(
+              op.payload,
+              op.clientMutationId,
+            );
+            upsertInCache(recreated);
+
+            queue = queue.map((queuedOp) => {
+              if (queuedOp.type === "update" && queuedOp.id === op.id) {
+                return { ...queuedOp, id: recreated.id };
+              }
+              if (queuedOp.type === "delete" && queuedOp.id === op.id) {
+                return { ...queuedOp, id: recreated.id };
+              }
+              return queuedOp;
+            });
+
+            queue = queue.slice(1);
+            writeQueue(queue);
+            i -= 1;
+            continue;
+          } catch (recreateErr) {
+            if (isRecoverableLocalError(recreateErr)) {
+              setBackendReachable(false);
+              setAuthRequired(isAuthError(recreateErr));
+              writeQueue(queue);
+              return;
+            }
+            throw recreateErr;
+          }
+        }
+
+        if (isRecoverableLocalError(err)) {
+          setBackendReachable(false);
+          setAuthRequired(isAuthError(err));
+          writeQueue(queue);
+          return;
+        }
+        throw err;
       }
-      throw err;
     }
-  }
+
+    try {
+      const logs = await fetchFoodLogsOnline();
+      writeCache(logs);
+    } catch {
+      // Keep local cache as-is if a final refresh fails.
+    }
+  })();
 
   try {
-    const logs = await fetchFoodLogsOnline();
-    writeCache(logs);
-  } catch {
-    // Keep local cache as-is if a final refresh fails.
+    await syncFoodLogQueuePromise;
+  } finally {
+    syncFoodLogQueuePromise = null;
   }
 }
 
@@ -312,8 +503,9 @@ export async function fetchFoodLogs() {
     writeCache(logs);
     return logs;
   } catch (err) {
-    if (!isOfflineLikeError(err)) throw err;
+    if (!isRecoverableLocalError(err)) throw err;
     setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
     return readCache();
   }
 }
@@ -324,10 +516,15 @@ export async function fetchFoodLogsByDate(date: string) {
     const logs = await fetchFoodLogsByDateOnline(date);
     const cache = readCache().filter((log) => log.date !== date || log.id < 0);
     writeCache([...cache, ...logs]);
+    writeDateCache(date, logs);
     return logs;
   } catch (err) {
-    if (!isOfflineLikeError(err)) throw err;
+    if (!isRecoverableLocalError(err)) throw err;
     setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
+
+    const dateCache = readDateCache(date);
+    if (dateCache.length > 0) return dateCache;
     return readCache().filter((log) => log.date === date);
   }
 }
@@ -339,14 +536,23 @@ export async function addFoodLogApi(log: FoodLogPayload) {
     await syncFoodLogQueue();
     const created = await addFoodLogOnline(log, clientMutationId);
     upsertInCache(created);
+    writeDateCache(created.date, [
+      ...readDateCache(created.date).filter((item) => item.id !== created.id),
+      created,
+    ]);
     return created;
   } catch (err) {
-    if (!isOfflineLikeError(err)) throw err;
+    if (!isRecoverableLocalError(err)) throw err;
     setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
 
     const tempId = nextTempId();
     const tempLog: FoodLogEntity = { id: tempId, ...log };
     upsertInCache(tempLog);
+    writeDateCache(log.date, [
+      ...readDateCache(log.date).filter((item) => item.id !== tempId),
+      tempLog,
+    ]);
     enqueue({ type: "add", tempId, payload: log, clientMutationId });
     return tempLog;
   }
@@ -359,14 +565,24 @@ export async function updateFoodLogApi(id: number, log: FoodLogPayload) {
     await syncFoodLogQueue();
     const updated = await updateFoodLogOnline(id, log, clientMutationId);
     upsertInCache(updated);
+    writeDateCache(updated.date, [
+      ...readDateCache(updated.date).filter((item) => item.id !== updated.id),
+      updated,
+    ]);
     return updated;
   } catch (err) {
-    if (!isOfflineLikeError(err)) throw err;
+    if (!isRecoverableLocalError(err)) throw err;
     setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
 
-    upsertInCache({ id, ...log });
+    const localUpdated = { id, ...log };
+    upsertInCache(localUpdated);
+    writeDateCache(log.date, [
+      ...readDateCache(log.date).filter((item) => item.id !== id),
+      localUpdated,
+    ]);
     enqueue({ type: "update", id, payload: log, clientMutationId });
-    return { id, ...log };
+    return localUpdated;
   }
 }
 
@@ -377,12 +593,26 @@ export async function deleteFoodLogApi(id: number) {
     await syncFoodLogQueue();
     await deleteFoodLogOnline(id, clientMutationId);
     removeFromCache(id);
+
+    const cacheByDate = readCacheByDate();
+    Object.keys(cacheByDate).forEach((date) => {
+      cacheByDate[date] = cacheByDate[date].filter((item) => item.id !== id);
+    });
+    writeCacheByDate(cacheByDate);
     return true;
   } catch (err) {
-    if (!isOfflineLikeError(err)) throw err;
+    if (!isRecoverableLocalError(err)) throw err;
     setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
 
     removeFromCache(id);
+
+    const cacheByDate = readCacheByDate();
+    Object.keys(cacheByDate).forEach((date) => {
+      cacheByDate[date] = cacheByDate[date].filter((item) => item.id !== id);
+    });
+    writeCacheByDate(cacheByDate);
+
     enqueue({ type: "delete", id, clientMutationId });
     return true;
   }
@@ -393,11 +623,10 @@ export async function startFoodLogGenerator(
   batchSize = 5,
   intervalMs = 2000,
 ) {
-  const res = await fetch(
+  const res = await fetchWithOptionalMutationHeader(
     `${ensureBackendUrl()}/api/food-logs/generator/start`,
     {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ date, batchSize, intervalMs }),
     },
   );
@@ -406,11 +635,10 @@ export async function startFoodLogGenerator(
 }
 
 export async function stopFoodLogGenerator() {
-  const res = await fetch(
+  const res = await fetchWithOptionalMutationHeader(
     `${ensureBackendUrl()}/api/food-logs/generator/stop`,
     {
       method: "POST",
-      headers: getAuthHeaders(),
     },
   );
   if (!res.ok) throw new Error("Failed to stop food log generator");

@@ -22,7 +22,7 @@ import type { FoodLog } from "../../features/food/FoodLogContext";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { isOffline, pendingSyncCount } = useFoodLogs();
+  const { isOffline, needsReauth, pendingSyncCount } = useFoodLogs();
   const streakDays = 12; // Mock streak data
   const connectionStatus: "offline" | "syncing" | "synced" = isOffline
     ? "offline"
@@ -48,8 +48,14 @@ export function DashboardPage() {
 
   const refreshSelectedDateLogs = useCallback(
     async (date?: Date) => {
-      const logs = await fetchFoodLogsForDate(date ?? selectedDateRef.current);
-      setFoodLogs(logs);
+      try {
+        const logs = await fetchFoodLogsForDate(
+          date ?? selectedDateRef.current,
+        );
+        setFoodLogs(logs);
+      } catch {
+        // Connectivity/auth fallback is handled in foodApi + context status flags.
+      }
     },
     [fetchFoodLogsForDate],
   );
@@ -120,6 +126,23 @@ export function DashboardPage() {
       />
 
       <main className="max-w-7xl mx-auto p-6">
+        {needsReauth && (
+          <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-800">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <span>
+                Session expired on server restart. Local changes are kept and
+                queued. Please sign in again to resume sync.
+              </span>
+              <button
+                type="button"
+                className="self-start rounded bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
+                onClick={() => navigate("/")}
+              >
+                Re-authenticate
+              </button>
+            </div>
+          </div>
+        )}
         {(isOffline || pendingSyncCount > 0) && (
           <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800">
             {isOffline

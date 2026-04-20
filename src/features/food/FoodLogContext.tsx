@@ -10,8 +10,10 @@ import {
   addFoodLogApi,
   updateFoodLogApi,
   deleteFoodLogApi,
+  isFoodLogAuthRequired,
   getPendingFoodLogSyncCount,
   isFoodLogBackendReachable,
+  onFoodLogApiStateChange,
   syncFoodLogQueue,
 } from "./foodApi";
 
@@ -29,6 +31,7 @@ export type FoodLog = {
 type FoodLogContextType = {
   foodLogs: FoodLog[];
   isOffline: boolean;
+  needsReauth: boolean;
   pendingSyncCount: number;
   addFoodLog: (log: Omit<FoodLog, "id">) => Promise<void>;
   updateFoodLog: (id: number, updated: Omit<FoodLog, "id">) => Promise<void>;
@@ -50,10 +53,20 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
   const [isOffline, setIsOffline] = useState(
     typeof navigator !== "undefined" ? !navigator.onLine : false,
   );
+  const [needsReauth, setNeedsReauth] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
 
   const refreshPendingCount = () => {
     setPendingSyncCount(getPendingFoodLogSyncCount());
+  };
+
+  const refreshStatusFlags = () => {
+    setNeedsReauth(isFoodLogAuthRequired());
+    setIsOffline(
+      typeof navigator !== "undefined"
+        ? !navigator.onLine || !isFoodLogBackendReachable()
+        : !isFoodLogBackendReachable(),
+    );
   };
 
   const syncPendingChanges = async () => {
@@ -66,14 +79,10 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
       await syncPendingChanges();
       const logs = await fetchFoodLogs();
       setFoodLogs(logs);
-      setIsOffline(
-        typeof navigator !== "undefined"
-          ? !navigator.onLine || !isFoodLogBackendReachable()
-          : !isFoodLogBackendReachable(),
-      );
+      refreshStatusFlags();
     } catch {
       setFoodLogs((prev) => prev);
-      setIsOffline(true);
+      refreshStatusFlags();
     } finally {
       refreshPendingCount();
     }
@@ -81,6 +90,23 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshFoodLogs();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onFoodLogApiStateChange(() => {
+      refreshStatusFlags();
+      refreshPendingCount();
+    });
+
+    const intervalId = window.setInterval(() => {
+      refreshStatusFlags();
+      refreshPendingCount();
+    }, 1000);
+
+    return () => {
+      unsubscribe();
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -139,6 +165,7 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
       value={{
         foodLogs,
         isOffline,
+        needsReauth,
         pendingSyncCount,
         addFoodLog,
         deleteFoodLog,
