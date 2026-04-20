@@ -2,20 +2,11 @@ import { FoodLogItem } from "./FoodLogItem";
 import { useFoodLogs } from "../../food/FoodLogContext";
 
 interface FoodLogsProps {
-  foodLogs: Array<{
-    id: number;
-    name: string;
-    time: string;
-    calories: number;
-    protein: number;
-    carbs: number;
-    fats: number;
-  }>;
   onAdd: () => void;
 }
 
-export function FoodLogs({ foodLogs, onAdd }: FoodLogsProps) {
-  const { deleteFoodLog } = useFoodLogs();
+export function FoodLogs({ onAdd }: FoodLogsProps) {
+  const { foodLogs, deleteFoodLog } = useFoodLogs();
 
   return (
     <div>

@@ -4,24 +4,40 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 
+const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // mock auth
-    if (email === "newuser@example.com" && password === "password123") {
-      setError("");
-      localStorage.setItem("isAuthenticated", "true");
-      navigate("/dashboard");
-      return;
+    setError("");
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || "Invalid email or password");
+        return;
+      }
+      // Store token from backend response
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("authToken", data.token);
+        localStorage.setItem("isAuthenticated", "true");
+        navigate("/dashboard");
+      } else {
+        setError("No token received from server");
+      }
+    } catch (err) {
+      setError("Network error. Please try again.");
     }
-
-    setError("Invalid email or password");
   };
 
   return (
