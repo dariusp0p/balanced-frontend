@@ -22,7 +22,17 @@ import type { FoodLog } from "../../features/food/FoodLogContext";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { isOffline, needsReauth, pendingSyncCount } = useFoodLogs();
+  const {
+    isOffline,
+    needsReauth,
+    pendingSyncCount,
+    foodLogGroups,
+    createFoodLogGroup,
+    updateFoodLogGroup,
+    deleteFoodLogGroup,
+    assignFoodLogToGroup,
+    getFoodLogGroupForLog,
+  } = useFoodLogs();
   const streakDays = 12; // Mock streak data
   const connectionStatus: "offline" | "syncing" | "synced" = isOffline
     ? "offline"
@@ -101,6 +111,10 @@ export function DashboardPage() {
   const totalProtein = foodLogs.reduce((sum, log) => sum + log.protein, 0);
   const totalCarbs = foodLogs.reduce((sum, log) => sum + log.carbs, 0);
   const totalFats = foodLogs.reduce((sum, log) => sum + log.fats, 0);
+  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+  const selectedDateGroups = foodLogGroups.filter(
+    (group) => group.date === selectedDateStr,
+  );
 
   function useIsMdUp() {
     const [isMdUp, setIsMdUp] = useState(false);
@@ -197,7 +211,26 @@ export function DashboardPage() {
           ) : (
             <FoodLogs
               foodLogs={foodLogs}
-              onAdd={() => navigate("/log-food?mode=manual")}
+              groups={selectedDateGroups}
+              selectedDate={selectedDateStr}
+              onCreateGroup={(name) =>
+                createFoodLogGroup(selectedDateStr, name)
+              }
+              onRenameGroup={updateFoodLogGroup}
+              onDeleteGroup={deleteFoodLogGroup}
+              onAssignLogToGroup={(foodLogId, groupId) =>
+                assignFoodLogToGroup(selectedDateStr, foodLogId, groupId)
+              }
+              getGroupForLog={(foodLogId) =>
+                getFoodLogGroupForLog(selectedDateStr, foodLogId)
+              }
+              onAdd={(groupId) =>
+                navigate(
+                  groupId
+                    ? `/log-food?mode=manual&groupId=${groupId}`
+                    : "/log-food?mode=manual",
+                )
+              }
             />
           )}
         </div>
