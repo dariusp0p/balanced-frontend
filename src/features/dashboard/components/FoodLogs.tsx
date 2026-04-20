@@ -1,12 +1,14 @@
 import { FoodLogItem } from "./FoodLogItem";
 import { useFoodLogs } from "../../food/FoodLogContext";
+import type { FoodLog } from "../../food/FoodLogContext";
 
 interface FoodLogsProps {
+  foodLogs: FoodLog[];
   onAdd: () => void;
 }
 
-export function FoodLogs({ onAdd }: FoodLogsProps) {
-  const { foodLogs, deleteFoodLog } = useFoodLogs();
+export function FoodLogs({ foodLogs, onAdd }: FoodLogsProps) {
+  const { deleteFoodLog } = useFoodLogs();
 
   return (
     <div>

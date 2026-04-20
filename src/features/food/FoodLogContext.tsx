@@ -10,6 +10,9 @@ import {
   addFoodLogApi,
   updateFoodLogApi,
   deleteFoodLogApi,
+  getPendingFoodLogSyncCount,
+  isFoodLogBackendReachable,
+  syncFoodLogQueue,
 } from "./foodApi";
 
 export type FoodLog = {
@@ -25,10 +28,13 @@ export type FoodLog = {
 
 type FoodLogContextType = {
   foodLogs: FoodLog[];
+  isOffline: boolean;
+  pendingSyncCount: number;
   addFoodLog: (log: Omit<FoodLog, "id">) => Promise<void>;
   updateFoodLog: (id: number, updated: Omit<FoodLog, "id">) => Promise<void>;
   deleteFoodLog: (id: number) => Promise<void>;
   refreshFoodLogs: () => Promise<void>;
+  syncPendingChanges: () => Promise<void>;
 };
 
 const FoodLogContext = createContext<FoodLogContextType | undefined>(undefined);
@@ -41,13 +47,35 @@ export function useFoodLogs() {
 
 export function FoodLogProvider({ children }: { children: ReactNode }) {
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== "undefined" ? !navigator.onLine : false,
+  );
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  const refreshPendingCount = () => {
+    setPendingSyncCount(getPendingFoodLogSyncCount());
+  };
+
+  const syncPendingChanges = async () => {
+    await syncFoodLogQueue();
+    refreshPendingCount();
+  };
 
   const refreshFoodLogs = async () => {
     try {
+      await syncPendingChanges();
       const logs = await fetchFoodLogs();
       setFoodLogs(logs);
-    } catch (e) {
-      setFoodLogs([]);
+      setIsOffline(
+        typeof navigator !== "undefined"
+          ? !navigator.onLine || !isFoodLogBackendReachable()
+          : !isFoodLogBackendReachable(),
+      );
+    } catch {
+      setFoodLogs((prev) => prev);
+      setIsOffline(true);
+    } finally {
+      refreshPendingCount();
     }
   };
 
@@ -55,18 +83,54 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
     refreshFoodLogs();
   }, []);
 
+  useEffect(() => {
+    if (!isOffline && pendingSyncCount === 0) return;
+
+    const intervalId = window.setInterval(() => {
+      void refreshFoodLogs();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isOffline, pendingSyncCount]);
+
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOffline(false);
+      await syncPendingChanges();
+      await refreshFoodLogs();
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      refreshPendingCount();
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   const addFoodLog = async (log: Omit<FoodLog, "id">) => {
     await addFoodLogApi(log);
+    refreshPendingCount();
     await refreshFoodLogs();
   };
 
   const updateFoodLog = async (id: number, updated: Omit<FoodLog, "id">) => {
     await updateFoodLogApi(id, updated);
+    refreshPendingCount();
     await refreshFoodLogs();
   };
 
   const deleteFoodLog = async (id: number) => {
     await deleteFoodLogApi(id);
+    refreshPendingCount();
     await refreshFoodLogs();
   };
 
@@ -74,10 +138,13 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
     <FoodLogContext.Provider
       value={{
         foodLogs,
+        isOffline,
+        pendingSyncCount,
         addFoodLog,
         deleteFoodLog,
         updateFoodLog,
         refreshFoodLogs,
+        syncPendingChanges,
       }}
     >
       {children}

@@ -31,6 +31,9 @@ export function LoginPage() {
       if (data.token) {
         localStorage.setItem("authToken", data.token);
         localStorage.setItem("isAuthenticated", "true");
+        if (typeof data.userId !== "undefined") {
+          localStorage.setItem("userId", String(data.userId));
+        }
         navigate("/dashboard");
       } else {
         setError("No token received from server");
