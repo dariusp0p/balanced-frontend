@@ -1,6 +1,25 @@
-const BACKEND_BASE_URL = (import.meta as any).env?.VITE_BACKEND_BASE_URL as
-  | string
-  | undefined;
+import type {
+  FoodLogEntity,
+  FoodLogPageEntity,
+  FoodLogPayload,
+  LogGroupEntity,
+  LogGroupPayload,
+} from "../types/foodLog";
+import {
+  addFoodLogOnline as addFoodLogRepository,
+  addLogGroupOnline as addLogGroupRepository,
+  deleteFoodLogOnline as deleteFoodLogRepository,
+  deleteLogGroupOnline as deleteLogGroupRepository,
+  fetchFoodLogsByDateGraphql as fetchFoodLogsByDateGraphqlRepository,
+  fetchFoodLogsByDateOnline as fetchFoodLogsByDateRepository,
+  fetchFoodLogsOnline as fetchFoodLogsRepository,
+  fetchFoodLogsPageOnline as fetchFoodLogsPageRepository,
+  fetchLogGroupsOnline as fetchLogGroupsRepository,
+  startFoodLogGeneratorOnline,
+  stopFoodLogGeneratorOnline,
+  updateFoodLogOnline as updateFoodLogRepository,
+  updateLogGroupOnline as updateLogGroupRepository,
+} from "./FoodLogRepository";
 
 const CACHE_KEY = "balanced.foodLogs.cache.v1";
 const CACHE_BY_DATE_KEY = "balanced.foodLogs.cacheByDate.v1";
@@ -14,45 +33,6 @@ let backendReachable = true;
 let authRequired = false;
 let syncFoodLogQueuePromise: Promise<void> | null = null;
 let syncLogGroupQueuePromise: Promise<void> | null = null;
-let supportsClientMutationHeader = true;
-const GRAPHQL_ENDPOINT = "/graphql";
-
-export type FoodLogPayload = {
-  name: string;
-  time: string;
-  date: string;
-  logGroupId?: number | null;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-};
-
-export type FoodLogEntity = FoodLogPayload & {
-  id: number;
-};
-
-export type LogGroupPayload = {
-  name: string;
-  date: string;
-  computeFromFoodLogs: boolean;
-  totalCalories: number;
-  totalProtein: number;
-  totalCarbs: number;
-  totalFats: number;
-};
-
-export type LogGroupEntity = LogGroupPayload & {
-  id: number;
-};
-
-export type FoodLogPageEntity = {
-  content: FoodLogEntity[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-};
 
 type OfflineOp =
   | {
@@ -83,50 +63,6 @@ type LogGroupOfflineOp =
       clientMutationId: string;
     }
   | { type: "delete"; id: number; clientMutationId: string };
-
-function getAuthHeaders(clientMutationId?: string) {
-  const token = localStorage.getItem("authToken");
-  return {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-    ...(clientMutationId && supportsClientMutationHeader
-      ? { "X-Client-Mutation-Id": clientMutationId }
-      : {}),
-  };
-}
-
-async function fetchWithOptionalMutationHeader(
-  url: string,
-  options: {
-    method?: "GET" | "POST" | "PUT" | "DELETE";
-    body?: string;
-    clientMutationId?: string;
-  } = {},
-) {
-  const { method = "GET", body, clientMutationId } = options;
-
-  const run = (withMutationHeader: boolean) =>
-    fetch(url, {
-      method,
-      headers: getAuthHeaders(
-        withMutationHeader ? clientMutationId : undefined,
-      ),
-      ...(typeof body !== "undefined" ? { body } : {}),
-    });
-
-  const shouldTryWithMutationHeader =
-    Boolean(clientMutationId) && supportsClientMutationHeader;
-
-  try {
-    return await run(shouldTryWithMutationHeader);
-  } catch (err) {
-    if (!shouldTryWithMutationHeader) throw err;
-
-    // Browser blocked the custom header in CORS preflight. Retry once without it.
-    supportsClientMutationHeader = false;
-    return await run(false);
-  }
-}
 
 function createClientMutationId() {
   if (
@@ -220,24 +156,13 @@ function isOfflineLikeError(err: unknown) {
   return (
     !isNavigatorOnline() ||
     message.includes("failed to fetch") ||
+    message.includes("fetch failed") ||
     message.includes("networkerror") ||
     message.includes("network request failed") ||
     message.includes("load failed") ||
     message.includes("could not connect") ||
     message.includes("access control")
   );
-}
-
-function createHttpError(status: number, message: string) {
-  const error = new Error(message) as Error & {
-    status?: number;
-    code?: string;
-  };
-  error.status = status;
-  if (status === 401 || status === 403) {
-    error.code = "AUTH_REQUIRED";
-  }
-  return error;
 }
 
 function isAuthError(err: unknown) {
@@ -257,13 +182,6 @@ function getHttpStatus(err: unknown) {
   if (!err || typeof err !== "object") return undefined;
   const status = "status" in err ? Number(err.status) : NaN;
   return Number.isFinite(status) ? status : undefined;
-}
-
-function ensureBackendUrl() {
-  if (!BACKEND_BASE_URL) {
-    throw new Error("Missing VITE_BACKEND_BASE_URL");
-  }
-  return BACKEND_BASE_URL;
 }
 
 function emitApiStateChange() {
@@ -399,265 +317,78 @@ function removeLogsForDeletedGroup(groupId: number) {
   writeQueue(queue);
 }
 
-async function fetchFoodLogsOnline(): Promise<FoodLogEntity[]> {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs?page=0&size=100`,
-  );
-  if (!res.ok) throw createHttpError(res.status, "Failed to fetch food logs");
-  const data = await res.json();
+function markBackendHealthy() {
   setBackendReachable(true);
   setAuthRequired(false);
-  return data.content || [];
+}
+
+async function runOnline<T>(operation: () => Promise<T>) {
+  const result = await operation();
+  markBackendHealthy();
+  return result;
+}
+
+async function fetchFoodLogsOnline() {
+  return runOnline(fetchFoodLogsRepository);
 }
 
 export async function fetchFoodLogsPageApi(
   page: number,
   size: number,
 ): Promise<FoodLogPageEntity> {
-  const params = new URLSearchParams({
-    page: String(page),
-    size: String(size),
-  });
-
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs?${params.toString()}`,
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to fetch paged food logs");
-  }
-
-  const data = await res.json();
-  setBackendReachable(true);
-  setAuthRequired(false);
-
-  return {
-    content: (data.content || []) as FoodLogEntity[],
-    page: Number(data.page ?? page),
-    size: Number(data.size ?? size),
-    totalElements: Number(data.totalElements ?? 0),
-    totalPages: Number(data.totalPages ?? 0),
-  };
+  return runOnline(() => fetchFoodLogsPageRepository(page, size));
 }
 
-async function fetchFoodLogsByDateOnline(
-  date: string,
-): Promise<FoodLogEntity[]> {
-  const params = new URLSearchParams({ date });
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/day?${params.toString()}`,
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to fetch food logs for date");
-  }
-  const data = await res.json();
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data;
+async function fetchFoodLogsByDateOnline(date: string) {
+  return runOnline(() => fetchFoodLogsByDateRepository(date));
 }
 
-type GraphqlFoodLog = {
-  id: string | number;
-  logGroupId?: string | number | null;
-  name: string;
-  date: string;
-  time: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-};
-
-async function runGraphqlQuery<T>(
-  query: string,
-  variables: Record<string, unknown>,
-): Promise<T> {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}${GRAPHQL_ENDPOINT}`,
-    {
-      method: "POST",
-      body: JSON.stringify({ query, variables }),
-    },
-  );
-
-  if (!res.ok) {
-    throw createHttpError(res.status, "GraphQL request failed");
-  }
-
-  const payload = await res.json();
-  if (Array.isArray(payload.errors) && payload.errors.length > 0) {
-    const message = String(payload.errors[0]?.message || "GraphQL error");
-    if (message.toLowerCase().includes("unauthorized")) {
-      throw createHttpError(401, message);
-    }
-    throw new Error(message);
-  }
-
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return payload.data as T;
-}
-
-async function fetchFoodLogsByDateGraphql(
-  date: string,
-): Promise<FoodLogEntity[]> {
-  const query = `
-    query FoodLogsByDate($date: String!) {
-      foodLogsByDate(date: $date) {
-        id
-        logGroupId
-        name
-        date
-        time
-        calories
-        protein
-        carbs
-        fats
-      }
-    }
-  `;
-
-  const data = await runGraphqlQuery<{ foodLogsByDate: GraphqlFoodLog[] }>(
-    query,
-    { date },
-  );
-
-  return (data.foodLogsByDate || []).map((log) => ({
-    id: Number(log.id),
-    logGroupId:
-      log.logGroupId === null || typeof log.logGroupId === "undefined"
-        ? null
-        : Number(log.logGroupId),
-    name: log.name,
-    date: log.date,
-    time: log.time,
-    calories: Number(log.calories),
-    protein: Number(log.protein),
-    carbs: Number(log.carbs),
-    fats: Number(log.fats),
-  }));
+async function fetchFoodLogsByDateGraphql(date: string) {
+  return runOnline(() => fetchFoodLogsByDateGraphqlRepository(date));
 }
 
 async function addFoodLogOnline(
   log: FoodLogPayload,
   clientMutationId?: string,
-): Promise<FoodLogEntity> {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs`,
-    {
-      method: "POST",
-      body: JSON.stringify(log),
-      clientMutationId,
-    },
-  );
-  if (!res.ok) throw createHttpError(res.status, "Failed to add food log");
-  const data = await res.json();
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data;
+) {
+  return runOnline(() => addFoodLogRepository(log, clientMutationId));
 }
 
 async function updateFoodLogOnline(
   id: number,
   log: FoodLogPayload,
   clientMutationId?: string,
-): Promise<FoodLogEntity> {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/${id}`,
-    {
-      method: "PUT",
-      body: JSON.stringify(log),
-      clientMutationId,
-    },
-  );
-  if (!res.ok) throw createHttpError(res.status, "Failed to update food log");
-  const data = await res.json();
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data;
+) {
+  return runOnline(() => updateFoodLogRepository(id, log, clientMutationId));
 }
 
 async function deleteFoodLogOnline(id: number, clientMutationId?: string) {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/${id}`,
-    {
-      method: "DELETE",
-      clientMutationId,
-    },
-  );
-  if (!res.ok) throw createHttpError(res.status, "Failed to delete food log");
-  setBackendReachable(true);
-  setAuthRequired(false);
+  return runOnline(() => deleteFoodLogRepository(id, clientMutationId));
 }
 
-async function fetchLogGroupsOnline(): Promise<LogGroupEntity[]> {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups?page=0&size=100`,
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to fetch log groups");
-  }
-  const data = await res.json();
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data.content || [];
+async function fetchLogGroupsOnline() {
+  return runOnline(fetchLogGroupsRepository);
 }
 
 async function addLogGroupOnline(
   payload: LogGroupPayload,
   clientMutationId?: string,
-): Promise<LogGroupEntity> {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-      clientMutationId,
-    },
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to create log group");
-  }
-  const data = (await res.json()) as LogGroupEntity;
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data;
+) {
+  return runOnline(() => addLogGroupRepository(payload, clientMutationId));
 }
 
 async function updateLogGroupOnline(
   id: number,
   payload: LogGroupPayload,
   clientMutationId?: string,
-): Promise<LogGroupEntity> {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups/${id}`,
-    {
-      method: "PUT",
-      body: JSON.stringify(payload),
-      clientMutationId,
-    },
+) {
+  return runOnline(() =>
+    updateLogGroupRepository(id, payload, clientMutationId),
   );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to update log group");
-  }
-  const data = (await res.json()) as LogGroupEntity;
-  setBackendReachable(true);
-  setAuthRequired(false);
-  return data;
 }
 
 async function deleteLogGroupOnline(id: number, clientMutationId?: string) {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups/${id}`,
-    {
-      method: "DELETE",
-      clientMutationId,
-    },
-  );
-  if (!res.ok) {
-    throw createHttpError(res.status, "Failed to delete log group");
-  }
-  setBackendReachable(true);
-  setAuthRequired(false);
+  return runOnline(() => deleteLogGroupRepository(id, clientMutationId));
 }
 
 function enqueueLogGroup(op: LogGroupOfflineOp) {
@@ -1110,26 +841,13 @@ export async function startFoodLogGenerator(
   batchSize = 5,
   intervalMs = 2000,
 ) {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/generator/start`,
-    {
-      method: "POST",
-      body: JSON.stringify({ date, batchSize, intervalMs }),
-    },
+  return runOnline(() =>
+    startFoodLogGeneratorOnline(date, batchSize, intervalMs),
   );
-  if (!res.ok) throw new Error("Failed to start food log generator");
-  return await res.json();
 }
 
 export async function stopFoodLogGenerator() {
-  const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/generator/stop`,
-    {
-      method: "POST",
-    },
-  );
-  if (!res.ok) throw new Error("Failed to stop food log generator");
-  return await res.json();
+  return runOnline(stopFoodLogGeneratorOnline);
 }
 
 export async function fetchLogGroupsApi() {

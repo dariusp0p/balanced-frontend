@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft } from "lucide-react";
 
-import { FoodLogItem } from "../dashboard/components/FoodLogItem";
-import { useFoodLogs } from "./FoodLogContext";
-import { fetchFoodLogsPageApi } from "./foodApi";
-import type { FoodLog } from "./FoodLogContext";
+import { FoodLogItem } from "../../dashboard/views/components/FoodLogItem";
+import { useFoodLogs } from "../store/FoodLogContext";
+import { fetchFoodLogsPageApi } from "../services/FoodLogManager";
+import type { FoodLog } from "../types/foodLog";
 
 type PageState = {
   page: number;

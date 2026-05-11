@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-} from "../../../components/ui/dropdown-menu";
+} from "../../../../shared/views/ui/dropdown-menu";
 
 interface TopNavProps {
   streakDays: number;

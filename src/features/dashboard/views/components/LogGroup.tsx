@@ -1,7 +1,6 @@
 import { Edit2, Plus, Trash2 } from "lucide-react";
 import { FoodLogItem } from "./FoodLogItem";
-import type { FoodLog } from "../../food/FoodLogContext";
-import type { FoodLogGroup } from "../../food/FoodLogContext";
+import type { FoodLog, FoodLogGroup } from "../../../food/types/foodLog";
 
 interface LogGroupProps {
   group: FoodLogGroup;

@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
-
-const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+import { Button } from "../../../shared/views/ui/button";
+import { Input } from "../../../shared/views/ui/input";
+import { Label } from "../../../shared/views/ui/label";
+import { login } from "../services/AuthManager";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -16,30 +15,10 @@ export function LoginPage() {
     e.preventDefault();
     setError("");
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.message || "Invalid email or password");
-        return;
-      }
-      // Store token from backend response
-      const data = await res.json();
-      if (data.token) {
-        localStorage.setItem("authToken", data.token);
-        localStorage.setItem("isAuthenticated", "true");
-        if (typeof data.userId !== "undefined") {
-          localStorage.setItem("userId", String(data.userId));
-        }
-        navigate("/dashboard");
-      } else {
-        setError("No token received from server");
-      }
+      await login({ email, password });
+      navigate("/dashboard");
     } catch (err) {
-      setError("Network error. Please try again.");
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     }
   };
 

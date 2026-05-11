@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Edit2, Trash2 } from "lucide-react";
-import { useFoodLogs } from "../features/food/FoodLogContext";
+import { useFoodLogs } from "../store/FoodLogContext";
 import {
   PieChart,
   Pie,
@@ -72,6 +72,8 @@ export function FoodDetailPage() {
           </button>
           <div className="flex items-center gap-3">
             <button
+              title="Edit"
+              aria-label="Edit food log"
               onClick={handleEdit}
               className="p-2 hover:bg-white/10 rounded transition-colors"
             >

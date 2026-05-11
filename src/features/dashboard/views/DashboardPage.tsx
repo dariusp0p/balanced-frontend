@@ -4,11 +4,13 @@ import { format } from "date-fns";
 import {
   fetchFoodLogsByDate,
   syncFoodLogQueue,
-} from "../../features/food/foodApi";
+} from "../../food/services/FoodLogManager";
 import {
   connectFoodLogsWs,
   disconnectFoodLogsWs,
-} from "../../features/food/foodWs";
+} from "../../food/services/FoodLogRealtime";
+import { useFoodLogs } from "../../food/store/FoodLogContext";
+import type { FoodLog } from "../../food/types/foodLog";
 import { TopNav } from "./components/TopNav";
 import { BottomNav } from "./components/BottomNav";
 import { DateNavigation } from "./components/DateNavigation";
@@ -16,9 +18,7 @@ import { CalorieTracker } from "./components/CalorieTracker";
 import { MacroProportionChart } from "./components/MacroProportionChart";
 import { MacroDisplay } from "./components/MacroDisplay";
 import { FoodLogs } from "./components/FoodLogs";
-import { GeneratorControls } from "./components/GeneratorControls";
-import { useFoodLogs } from "../../features/food/FoodLogContext";
-import type { FoodLog } from "../../features/food/FoodLogContext";
+import { GeneratorControls } from "../../food/views/GeneratorControls";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -64,7 +64,7 @@ export function DashboardPage() {
         );
         setFoodLogs(logs);
       } catch {
-        // Connectivity/auth fallback is handled in foodApi + context status flags.
+        // Connectivity/auth fallback is handled in FoodLogManager + context status flags.
       }
     },
     [fetchFoodLogsForDate],
@@ -115,20 +115,6 @@ export function DashboardPage() {
   const selectedDateGroups = foodLogGroups.filter(
     (group) => group.date === selectedDateStr,
   );
-
-  function useIsMdUp() {
-    const [isMdUp, setIsMdUp] = useState(false);
-    useEffect(() => {
-      const check = () =>
-        setIsMdUp(window.matchMedia("(min-width: 768px)").matches);
-      check();
-      window.addEventListener("resize", check);
-      return () => window.removeEventListener("resize", check);
-    }, []);
-    return isMdUp;
-  }
-
-  const isMdUp = useIsMdUp();
 
   return (
     <div className="min-h-screen bg-background">

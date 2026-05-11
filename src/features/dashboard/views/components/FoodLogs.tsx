@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import { FoodLogItem } from "./FoodLogItem";
 import { LogGroup } from "./LogGroup";
-import { useFoodLogs } from "../../food/FoodLogContext";
-import type { FoodLog } from "../../food/FoodLogContext";
-import type { FoodLogGroup } from "../../food/FoodLogContext";
+import { useFoodLogs } from "../../../food/store/FoodLogContext";
+import type { FoodLog, FoodLogGroup } from "../../../food/types/foodLog";
 
 interface FoodLogsProps {
   foodLogs: FoodLog[];

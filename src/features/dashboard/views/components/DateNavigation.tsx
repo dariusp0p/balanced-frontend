@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useState } from "react";
 import { format, isToday, isYesterday, subDays, addDays } from "date-fns";
-import { PopUpCalendar } from "../../../components/PopUpCalendar";
+import { PopUpCalendar } from "../../../../shared/views/PopUpCalendar";
 
 export function DateNavigation({
   initialDate,

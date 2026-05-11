@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { X, Camera, RotateCw, Check } from "lucide-react";
-import { Button } from "./ui/button";
+import { Button } from "../../../shared/views/ui/button";
 
 export function CameraCapture() {
   const navigate = useNavigate();

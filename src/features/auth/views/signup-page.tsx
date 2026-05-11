@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
-
-const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+import { Button } from "../../../shared/views/ui/button";
+import { Input } from "../../../shared/views/ui/input";
+import { Label } from "../../../shared/views/ui/label";
+import { signup } from "../services/AuthManager";
 
 export function SignupPage() {
   const navigate = useNavigate();
@@ -22,21 +21,10 @@ export function SignupPage() {
       return;
     }
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/auth/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, confirmPassword }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.message || "Registration failed");
-        return;
-      }
-      // Optionally store token/session here
-      localStorage.setItem("isAuthenticated", "true");
+      await signup({ name, email, password, confirmPassword });
       navigate("/dashboard");
     } catch (err) {
-      setError("Network error. Please try again.");
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     }
   };
 

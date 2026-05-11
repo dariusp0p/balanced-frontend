@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   startFoodLogGenerator,
   stopFoodLogGenerator,
-} from "../../food/foodApi";
+} from "../services/FoodLogManager";
 
 type GeneratorControlsProps = {
   defaultDate: string;

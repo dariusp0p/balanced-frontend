@@ -2,8 +2,8 @@ import { useNavigate, useLocation } from "react-router";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 
-import { useFoodLogs } from "./FoodLogContext";
-import { foodLogSchema } from "./foodLogValidation";
+import { useFoodLogs } from "../store/FoodLogContext";
+import { foodLogSchema } from "../utils/foodLogValidation";
 
 export function LogFoodPage() {
   const navigate = useNavigate();

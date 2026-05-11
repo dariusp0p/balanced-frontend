@@ -1,8 +1,8 @@
 // tests/FoodLogs.test.tsx
 import { MemoryRouter } from "react-router";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { FoodLogs } from "../src/features/dashboard/components/FoodLogs";
-import { FoodLogProvider } from "../src/features/food/FoodLogContext";
+import { FoodLogs } from "../src/features/dashboard/views/components/FoodLogs";
+import { FoodLogProvider } from "../src/features/food/store/FoodLogContext";
 
 const logs = [
   {

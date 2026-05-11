@@ -1,6 +1,6 @@
 // tests/FoodLogItem.test.tsx
 import { render, screen, fireEvent } from "@testing-library/react";
-import { FoodLogItem } from "../src/features/dashboard/components/FoodLogItem";
+import { FoodLogItem } from "../src/features/dashboard/views/components/FoodLogItem";
 import { MemoryRouter } from "react-router";
 
 test("delete button calls onDelete after confirm", () => {

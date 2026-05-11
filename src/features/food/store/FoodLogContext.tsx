@@ -19,30 +19,10 @@ import {
   isFoodLogBackendReachable,
   onFoodLogApiStateChange,
   syncFoodLogQueue,
-} from "./foodApi";
+} from "../services/FoodLogManager";
+import type { FoodLog, FoodLogGroup } from "../types/foodLog";
 
-export type FoodLog = {
-  id: number;
-  name: string;
-  time: string;
-  date: string;
-  logGroupId?: number | null;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-};
-
-export type FoodLogGroup = {
-  id: number;
-  date: string;
-  name: string;
-  totalCalories?: number;
-  totalProtein?: number;
-  totalCarbs?: number;
-  totalFats?: number;
-  computeFromFoodLogs?: boolean;
-};
+export type { FoodLog, FoodLogGroup } from "../types/foodLog";
 
 type FoodLogContextType = {
   foodLogs: FoodLog[];

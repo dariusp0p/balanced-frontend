@@ -1,4 +1,4 @@
-import { foodLogSchema } from "../src/features/food/foodLogValidation";
+import { foodLogSchema } from "../src/features/food/utils/foodLogValidation";
 
 const valid = {
   name: "Eggs",
