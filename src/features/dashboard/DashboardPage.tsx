@@ -245,7 +245,7 @@ export function DashboardPage() {
         </div>
       </main>
 
-      <GeneratorControls defaultDate={format(selectedDate, "yyyy-MM-dd")} />
+      {/* <GeneratorControls defaultDate={format(selectedDate, "yyyy-MM-dd")} /> */}
       <BottomNav navigate={navigate} />
     </div>
   );
