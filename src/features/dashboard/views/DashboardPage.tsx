@@ -185,8 +185,8 @@ export function DashboardPage() {
               onAdd={(groupId) =>
                 navigate(
                   groupId
-                    ? `/log-food?mode=manual&groupId=${groupId}`
-                    : "/log-food?mode=manual",
+                    ? `/log-food?mode=manual&date=${selectedDateStr}&groupId=${groupId}`
+                    : `/log-food?mode=manual&date=${selectedDateStr}`,
                 )
               }
             />
