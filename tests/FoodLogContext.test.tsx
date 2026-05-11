@@ -1,23 +1,25 @@
 // tests/FoodLogContext.test.tsx
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import {
   FoodLogProvider,
   useFoodLogs,
-} from "../src/features/food/FoodLogContext";
+} from "../src/features/food/store/FoodLogContext";
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <FoodLogProvider>{children}</FoodLogProvider>;
 }
 
-test("provides initial food logs", () => {
+test("provides initial food logs", async () => {
   const { result } = renderHook(() => useFoodLogs(), { wrapper });
+  await waitFor(() => expect(result.current.foodLogs.length).toBeGreaterThan(0));
   expect(result.current.foodLogs.length).toBeGreaterThan(0);
 });
 
-test("adds a food log", () => {
+test("adds a food log", async () => {
   const { result } = renderHook(() => useFoodLogs(), { wrapper });
-  act(() => {
-    result.current.addFoodLog({
+  await waitFor(() => expect(result.current.foodLogs.length).toBeGreaterThan(0));
+  await act(async () => {
+    await result.current.addFoodLog({
       name: "Test",
       time: "10:00",
       date: "2024-03-30",
@@ -27,14 +29,18 @@ test("adds a food log", () => {
       fats: 5,
     });
   });
+  await waitFor(() =>
+    expect(result.current.foodLogs.some((f) => f.name === "Test")).toBe(true),
+  );
   expect(result.current.foodLogs.some((f) => f.name === "Test")).toBe(true);
 });
 
-test("updates a food log", () => {
+test("updates a food log", async () => {
   const { result } = renderHook(() => useFoodLogs(), { wrapper });
+  await waitFor(() => expect(result.current.foodLogs.length).toBeGreaterThan(0));
   const id = result.current.foodLogs[0].id;
-  act(() => {
-    result.current.updateFoodLog(id, {
+  await act(async () => {
+    await result.current.updateFoodLog(id, {
       name: "Updated",
       time: "11:00",
       date: "2024-03-30",
@@ -44,15 +50,20 @@ test("updates a food log", () => {
       fats: 10,
     });
   });
+  await waitFor(() => expect(result.current.foodLogs[0].name).toBe("Updated"));
   expect(result.current.foodLogs[0].name).toBe("Updated");
 });
 
-test("deletes a food log", () => {
+test("deletes a food log", async () => {
   const { result } = renderHook(() => useFoodLogs(), { wrapper });
+  await waitFor(() => expect(result.current.foodLogs.length).toBeGreaterThan(0));
   const id = result.current.foodLogs[0].id;
-  act(() => {
-    result.current.deleteFoodLog(id);
+  await act(async () => {
+    await result.current.deleteFoodLog(id);
   });
+  await waitFor(() =>
+    expect(result.current.foodLogs.some((f) => f.id === id)).toBe(false),
+  );
   expect(result.current.foodLogs.some((f) => f.id === id)).toBe(false);
 });
 
@@ -65,11 +76,12 @@ test("throws error if useFoodLogs is used outside provider", () => {
   spy.mockRestore();
 });
 
-test("adds a food log with incremented id", () => {
+test("adds a food log with incremented id", async () => {
   const { result } = renderHook(() => useFoodLogs(), { wrapper });
+  await waitFor(() => expect(result.current.foodLogs.length).toBeGreaterThan(0));
   const initialLength = result.current.foodLogs.length;
-  act(() => {
-    result.current.addFoodLog({
+  await act(async () => {
+    await result.current.addFoodLog({
       name: "Test",
       time: "10:00",
       date: "2024-03-30",
@@ -79,22 +91,27 @@ test("adds a food log with incremented id", () => {
       fats: 5,
     });
   });
+  await waitFor(() =>
+    expect(result.current.foodLogs.length).toBe(initialLength + 1),
+  );
   const lastLog = result.current.foodLogs[result.current.foodLogs.length - 1];
   expect(result.current.foodLogs.length).toBe(initialLength + 1);
   expect(lastLog.id).toBeGreaterThan(0);
   expect(lastLog.name).toBe("Test");
 });
 
-test("adds a food log when list is empty (id = 1)", () => {
+test("adds a food log when list is empty (id = 1)", async () => {
   const { result } = renderHook(() => useFoodLogs(), { wrapper });
+  await waitFor(() => expect(result.current.foodLogs.length).toBeGreaterThan(0));
   // Remove all logs
-  act(() => {
-    result.current.foodLogs.forEach((log) =>
-      result.current.deleteFoodLog(log.id),
+  await act(async () => {
+    await Promise.all(
+      result.current.foodLogs.map((log) => result.current.deleteFoodLog(log.id)),
     );
   });
-  act(() => {
-    result.current.addFoodLog({
+  await waitFor(() => expect(result.current.foodLogs.length).toBe(0));
+  await act(async () => {
+    await result.current.addFoodLog({
       name: "First",
       time: "08:00",
       date: "2024-03-31",
@@ -104,6 +121,7 @@ test("adds a food log when list is empty (id = 1)", () => {
       fats: 2,
     });
   });
+  await waitFor(() => expect(result.current.foodLogs.length).toBe(1));
   expect(result.current.foodLogs.length).toBe(1);
   expect(result.current.foodLogs[0].id).toBe(1);
   expect(result.current.foodLogs[0].name).toBe("First");

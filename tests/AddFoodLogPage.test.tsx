@@ -1,7 +1,7 @@
 // tests/AddFoodLogPage.test.tsx
 import { render, screen, fireEvent } from "@testing-library/react";
-import { FoodLogProvider } from "../src/features/food/FoodLogContext";
-import { LogFoodPage } from "../src/features/food/AddFoodLogPage";
+import { FoodLogProvider } from "../src/features/food/store/FoodLogContext";
+import { LogFoodPage } from "../src/features/food/views/AddFoodLogPage";
 import { MemoryRouter } from "react-router";
 import { useLocation, Route, Routes } from "react-router";
 
@@ -77,7 +77,7 @@ test("edits a food log", () => {
 test("pre-fills form in edit mode and updates log", async () => {
   setup("/log-food?edit=1");
   // Should pre-fill with Greek Yogurt & Berries
-  expect(screen.getByDisplayValue(/greek yogurt/i)).toBeInTheDocument();
+  expect(await screen.findByDisplayValue(/greek yogurt/i)).toBeInTheDocument();
   fireEvent.change(screen.getByPlaceholderText(/food name/i), {
     target: { value: "Updated Yogurt" },
   });

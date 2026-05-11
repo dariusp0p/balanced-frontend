@@ -1,8 +1,8 @@
 // tests/FoodLogs.test.tsx
 import { MemoryRouter } from "react-router";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { FoodLogs } from "../src/features/dashboard/components/FoodLogs";
-import { FoodLogProvider } from "../src/features/food/FoodLogContext";
+import { FoodLogs } from "../src/features/dashboard/views/components/FoodLogs";
+import { FoodLogProvider } from "../src/features/food/store/FoodLogContext";
 
 const logs = [
   {
@@ -25,6 +25,7 @@ test("renders food logs", () => {
           foodLogs={logs}
           groups={[]}
           selectedDate="2026-04-20"
+          onDeleteFoodLog={vi.fn()}
           onCreateGroup={vi.fn()}
           onRenameGroup={vi.fn()}
           onDeleteGroup={vi.fn()}
@@ -47,6 +48,7 @@ test("calls onAdd when add button clicked", () => {
           foodLogs={logs}
           groups={[]}
           selectedDate="2026-04-20"
+          onDeleteFoodLog={vi.fn()}
           onCreateGroup={vi.fn()}
           onRenameGroup={vi.fn()}
           onDeleteGroup={vi.fn()}
@@ -71,6 +73,7 @@ test("opens create group modal and creates group", () => {
           foodLogs={logs}
           groups={[]}
           selectedDate="2026-04-20"
+          onDeleteFoodLog={vi.fn()}
           onCreateGroup={onCreateGroup}
           onRenameGroup={vi.fn()}
           onDeleteGroup={vi.fn()}
@@ -102,6 +105,7 @@ test("calls onAdd from inside log group", () => {
           foodLogs={logs}
           groups={groups}
           selectedDate="2026-04-20"
+          onDeleteFoodLog={vi.fn()}
           onCreateGroup={vi.fn()}
           onRenameGroup={vi.fn()}
           onDeleteGroup={vi.fn()}
