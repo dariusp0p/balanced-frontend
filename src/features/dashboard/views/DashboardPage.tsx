@@ -137,7 +137,7 @@ export function DashboardPage() {
           </div>
         </div>
         <div>
-          <div className="mb-4">
+          {/* <div className="mb-4">
             <button
               type="button"
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
@@ -145,7 +145,7 @@ export function DashboardPage() {
             >
               Open Infinite Scroll Demo
             </button>
-          </div>
+          </div> */}
           {loading ? (
             <div className="text-center text-gray-500">Loading...</div>
           ) : (

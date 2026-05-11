@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FoodLogItem } from "./FoodLogItem";
 import { LogGroup } from "./LogGroup";
 import type { FoodLog, FoodLogGroup } from "../../../food/types/foodLog";
@@ -33,10 +33,42 @@ export function FoodLogs({
 }: FoodLogsProps) {
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [draggedLogId, setDraggedLogId] = useState<number | null>(null);
+  const [hoveredGroupId, setHoveredGroupId] = useState<number | null>(null);
+  const draggedLogIdRef = useRef<number | null>(null);
+  const pointerDragRef = useRef<{
+    id: number;
+    startX: number;
+    startY: number;
+    isDragging: boolean;
+  } | null>(null);
+  const orderedGroups = useMemo(() => {
+    const standardOrder: Record<string, number> = {
+      BREAKFAST: 0,
+      LUNCH: 1,
+      DINNER: 2,
+      SNACK: 3,
+    };
+
+    return [...groups].sort((a, b) => {
+      const aOrder = standardOrder[a.mealType ?? ""] ?? 99;
+      const bOrder = standardOrder[b.mealType ?? ""] ?? 99;
+
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+
+      if (aOrder === 99) {
+        return a.name.localeCompare(b.name);
+      }
+
+      return a.id - b.id;
+    });
+  }, [groups]);
 
   const logsByGroup = useMemo(() => {
     const grouped = new Map<number, FoodLog[]>();
-    groups.forEach((group) => grouped.set(group.id, []));
+    orderedGroups.forEach((group) => grouped.set(group.id, []));
 
     const ungrouped: FoodLog[] = [];
     foodLogs.forEach((log) => {
@@ -49,7 +81,7 @@ export function FoodLogs({
     });
 
     return { grouped, ungrouped };
-  }, [foodLogs, groups, getGroupForLog]);
+  }, [foodLogs, orderedGroups, getGroupForLog]);
 
   const handleCreateGroup = async () => {
     const name = newGroupName.trim();
@@ -59,37 +91,34 @@ export function FoodLogs({
     setIsCreateGroupOpen(false);
   };
 
-  const renderGroupSelector = (logId: number) => {
-    const selectedGroupId = getGroupForLog(logId) || "";
-    return (
-      <div className="mt-2 flex items-center gap-2">
-        <label
-          htmlFor={`group-select-${selectedDate}-${logId}`}
-          className="text-xs text-gray-500"
-        >
-          Group
-        </label>
-        <select
-          id={`group-select-${selectedDate}-${logId}`}
-          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
-          value={selectedGroupId ?? ""}
-          onChange={(e) => {
-            const nextValue = e.target.value;
-            void onAssignLogToGroup(
-              logId,
-              nextValue ? Number(nextValue) : null,
-            );
-          }}
-        >
-          <option value="">Ungrouped</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
+  const setActiveDrag = (logId: number | null) => {
+    draggedLogIdRef.current = logId;
+    setDraggedLogId(logId);
+    if (logId === null) {
+      setHoveredGroupId(null);
+    }
+  };
+
+  const getDropGroupIdAtPoint = (x: number, y: number) => {
+    const target = document
+      .elementsFromPoint(x, y)
+      .map((element) => element.closest("[data-drop-group-id]"))
+      .find(Boolean);
+
+    const value = target?.getAttribute("data-drop-group-id");
+    return value ? Number(value) : null;
+  };
+
+  const assignDraggedLogToGroup = (groupId: number) => {
+    const logId = draggedLogIdRef.current;
+    if (!logId) return;
+    if (getGroupForLog(logId) === groupId) return;
+    void onAssignLogToGroup(logId, groupId);
+  };
+
+  const finishDrag = () => {
+    pointerDragRef.current = null;
+    setActiveDrag(null);
   };
 
   const renderLogs = (logs: FoodLog[]) => (
@@ -100,8 +129,47 @@ export function FoodLogs({
           className="animate-fade-in-up"
           style={{ animationDelay: `${idx * 120}ms` }}
         >
-          <FoodLogItem {...log} onDelete={onDeleteFoodLog} />
-          {renderGroupSelector(log.id)}
+          <FoodLogItem
+            {...log}
+            draggable
+            isDragging={draggedLogId === log.id}
+            onDelete={onDeleteFoodLog}
+            onDragStartLog={setActiveDrag}
+            onDragEndLog={finishDrag}
+            onPointerDownLog={(id, x, y) => {
+              pointerDragRef.current = {
+                id,
+                startX: x,
+                startY: y,
+                isDragging: false,
+              };
+            }}
+            onPointerMoveLog={(x, y) => {
+              const active = pointerDragRef.current;
+              if (!active) return;
+
+              const distance = Math.hypot(x - active.startX, y - active.startY);
+              if (!active.isDragging && distance > 8) {
+                active.isDragging = true;
+                setActiveDrag(active.id);
+              }
+              if (!active.isDragging) return;
+
+              setHoveredGroupId(getDropGroupIdAtPoint(x, y));
+            }}
+            onPointerUpLog={(x, y) => {
+              const active = pointerDragRef.current;
+              if (active?.isDragging) {
+                const groupId =
+                  hoveredGroupId ?? getDropGroupIdAtPoint(x, y);
+                if (groupId !== null) {
+                  assignDraggedLogToGroup(groupId);
+                }
+              }
+              finishDrag();
+            }}
+            onPointerCancelLog={finishDrag}
+          />
         </div>
       ))}
     </div>
@@ -109,24 +177,21 @@ export function FoodLogs({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 md:mb-4 px-0 md:px-0">
-        <h2 className="text-lg md:text-sm font-medium text-gray-600">
-          today's logs
-        </h2>
-        <div className="flex items-center gap-3">
+      <div className="mb-6 flex flex-col gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
-            className="text-gray-600 text-sm hover:underline"
-            onClick={() => setIsCreateGroupOpen(true)}
+            className="flex w-full items-center justify-center rounded-xl bg-orange px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange/90"
+            onClick={() => onAdd()}
           >
-            group +
+            Log Food
           </button>
           <button
             type="button"
-            className="text-orange text-sm hover:underline"
-            onClick={() => onAdd()}
+            className="flex w-full items-center justify-center rounded-xl bg-cyan px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-cyan/85"
+            onClick={() => setIsCreateGroupOpen(true)}
           >
-            add +
+            Create Group
           </button>
         </div>
       </div>
@@ -188,41 +253,71 @@ export function FoodLogs({
         </div>
       )}
 
-      {logsByGroup.ungrouped.length > 0 && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white/70 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-800">Ungrouped</h3>
-            <span className="text-xs text-gray-500">
-              {logsByGroup.ungrouped.length} logs
-            </span>
-          </div>
-          {renderLogs(logsByGroup.ungrouped)}
-        </div>
-      )}
-
       <div className="space-y-6">
-        {groups.map((group) => {
+        {orderedGroups.map((group) => {
           const groupLogs = logsByGroup.grouped.get(group.id) || [];
           return (
             <LogGroup
               key={group.id}
               group={group}
               logs={groupLogs}
-              allGroups={groups}
-              selectedDate={selectedDate}
               onRenameGroup={onRenameGroup}
               onDeleteGroup={onDeleteGroup}
-              onAssignLogToGroup={onAssignLogToGroup}
-              getGroupForLog={getGroupForLog}
               onDeleteFoodLog={onDeleteFoodLog}
-              onAddFoodLog={(groupId) => onAdd(groupId)}
+              draggingLogId={draggedLogId}
+              hoveredGroupId={hoveredGroupId}
+              onDragStartLog={setActiveDrag}
+              onDragEndLog={finishDrag}
+              onPointerDownLog={(id, x, y) => {
+                pointerDragRef.current = {
+                  id,
+                  startX: x,
+                  startY: y,
+                  isDragging: false,
+                };
+              }}
+              onPointerMoveLog={(x, y) => {
+                const active = pointerDragRef.current;
+                if (!active) return;
+
+                const distance = Math.hypot(
+                  x - active.startX,
+                  y - active.startY,
+                );
+                if (!active.isDragging && distance > 8) {
+                  active.isDragging = true;
+                  setActiveDrag(active.id);
+                }
+                if (!active.isDragging) return;
+
+                setHoveredGroupId(getDropGroupIdAtPoint(x, y));
+              }}
+              onPointerUpLog={(x, y) => {
+                const active = pointerDragRef.current;
+                if (active?.isDragging) {
+                  const groupId =
+                    hoveredGroupId ?? getDropGroupIdAtPoint(x, y);
+                  if (groupId !== null) {
+                    assignDraggedLogToGroup(groupId);
+                  }
+                }
+                finishDrag();
+              }}
+              onPointerCancelLog={finishDrag}
+              onDropLog={(groupId) => {
+                assignDraggedLogToGroup(groupId);
+                finishDrag();
+              }}
+              onHoverGroup={setHoveredGroupId}
             />
           );
         })}
+
+        {logsByGroup.ungrouped.length > 0 && renderLogs(logsByGroup.ungrouped)}
       </div>
 
       {foodLogs.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+        <div className="mt-6 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
           No logs for this day yet.
         </div>
       )}
