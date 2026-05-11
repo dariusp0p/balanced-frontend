@@ -109,7 +109,7 @@ export function FriendsPage() {
 
     const tempId = createTempId();
     const optimisticMessage: ChatMessage = {
-      id: -1,
+      id: tempId,
       senderId: me,
       senderName: "",
       receiverId: selectedUser.id,

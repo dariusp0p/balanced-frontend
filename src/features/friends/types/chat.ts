@@ -7,7 +7,7 @@ export type AppUser = {
 };
 
 export type ChatMessage = {
-  id: number;
+  id: string;
   senderId: number;
   senderName: string;
   receiverId: number;
