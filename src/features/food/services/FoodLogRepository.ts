@@ -170,27 +170,31 @@ export async function fetchFoodLogsByDateGraphql(
   date: string,
 ): Promise<FoodLogEntity[]> {
   const query = `
-    query FoodLogsByDate($date: String!) {
-      foodLogsByDate(date: $date) {
-        id
-        logGroupId
-        name
-        date
-        time
-        calories
-        protein
-        carbs
-        fats
+    query DailyLogForFoodLogs($date: String!) {
+      dailyLog(date: $date) {
+        foodLogs {
+          id
+          logGroupId
+          name
+          date
+          time
+          calories
+          protein
+          carbs
+          fats
+        }
       }
     }
   `;
 
-  const data = await runGraphqlQuery<{ foodLogsByDate: GraphqlFoodLog[] }>(
+  const data = await runGraphqlQuery<{
+    dailyLog: { foodLogs: GraphqlFoodLog[] };
+  }>(
     query,
     { date },
   );
 
-  return (data.foodLogsByDate || []).map((log) => ({
+  return (data.dailyLog?.foodLogs || []).map((log) => ({
     id: Number(log.id),
     logGroupId:
       log.logGroupId === null || typeof log.logGroupId === "undefined"

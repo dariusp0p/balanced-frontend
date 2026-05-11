@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router";
 import { Bell, ChevronRight, LogOut, Moon, ScrollText, Shield } from "lucide-react";
 
 import { BottomNav } from "../../dashboard/views/components/BottomNav";
+import { TopNav } from "../../dashboard/views/components/TopNav";
+import { useFoodLogs } from "../../food/store/FoodLogContext";
 
 type SettingsItem = {
   label: string;
@@ -25,7 +27,14 @@ function isAdminUser() {
 export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOffline, pendingSyncCount } = useFoodLogs();
   const admin = isAdminUser();
+  const streakDays = 12; // Mock streak data
+  const connectionStatus: "offline" | "syncing" | "synced" = isOffline
+    ? "offline"
+    : pendingSyncCount > 0
+      ? "syncing"
+      : "synced";
 
   const sections = useMemo(() => {
     const appItems: SettingsItem[] = [
@@ -53,20 +62,12 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-dark-blue px-4 py-4 text-white">
-        <div className="mx-auto flex w-full max-w-[480px] items-center justify-between">
-          <h1 className="text-xl font-semibold">Settings</h1>
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/15"
-            aria-label="Log out"
-            title="Log out"
-            onClick={() => navigate("/")}
-          >
-            <LogOut className="h-5 w-5" />
-          </button>
-        </div>
-      </header>
+      <TopNav
+        streakDays={streakDays}
+        connectionStatus={connectionStatus}
+        navigate={navigate}
+        currentPath={location.pathname}
+      />
 
       <main className="mx-auto w-full max-w-[480px] space-y-6 px-4 pb-28 pt-6">
         {sections.map((section) => (
@@ -102,9 +103,23 @@ export function SettingsPage() {
             </div>
           </section>
         ))}
+
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-dark-blue px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-dark-blue/90"
+          onClick={() => navigate("/")}
+        >
+          <LogOut className="h-4 w-4" />
+          <span>Log out</span>
+        </button>
       </main>
 
-      <BottomNav navigate={navigate} currentPath={location.pathname} />
+      <BottomNav
+        navigate={navigate}
+        currentPath={location.pathname}
+        streakDays={streakDays}
+        connectionStatus={connectionStatus}
+      />
     </div>
   );
 }

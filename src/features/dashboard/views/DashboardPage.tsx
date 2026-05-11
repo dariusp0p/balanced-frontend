@@ -84,7 +84,12 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNav streakDays={streakDays} connectionStatus={connectionStatus} />
+      <TopNav
+        streakDays={streakDays}
+        connectionStatus={connectionStatus}
+        navigate={navigate}
+        currentPath={location.pathname}
+      />
 
       <main className="mx-auto w-full max-w-[480px] px-4 pb-28 pt-6">
         {needsReauth && (
@@ -190,7 +195,12 @@ export function DashboardPage() {
       </main>
 
       {/* <GeneratorControls defaultDate={format(selectedDate, "yyyy-MM-dd")} /> */}
-      <BottomNav navigate={navigate} currentPath={location.pathname} />
+      <BottomNav
+        navigate={navigate}
+        currentPath={location.pathname}
+        streakDays={streakDays}
+        connectionStatus={connectionStatus}
+      />
     </div>
   );
 }
