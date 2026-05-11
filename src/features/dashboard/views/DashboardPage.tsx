@@ -1,37 +1,30 @@
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { format } from "date-fns";
-import {
-  fetchFoodLogsByDate,
-  syncFoodLogQueue,
-} from "../../food/services/FoodLogManager";
-import {
-  connectFoodLogsWs,
-  disconnectFoodLogsWs,
-} from "../../food/services/FoodLogRealtime";
 import { useFoodLogs } from "../../food/store/FoodLogContext";
 import type { FoodLog } from "../../food/types/foodLog";
 import { TopNav } from "./components/TopNav";
 import { BottomNav } from "./components/BottomNav";
 import { DateNavigation } from "./components/DateNavigation";
 import { CalorieTracker } from "./components/CalorieTracker";
-import { MacroProportionChart } from "./components/MacroProportionChart";
 import { MacroDisplay } from "./components/MacroDisplay";
 import { FoodLogs } from "./components/FoodLogs";
-import { GeneratorControls } from "../../food/views/GeneratorControls";
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     isOffline,
     needsReauth,
     pendingSyncCount,
     foodLogGroups,
+    deleteFoodLog,
     createFoodLogGroup,
     updateFoodLogGroup,
     deleteFoodLogGroup,
     assignFoodLogToGroup,
     getFoodLogGroupForLog,
+    loadDailyFoodLog,
   } = useFoodLogs();
   const streakDays = 12; // Mock streak data
   const connectionStatus: "offline" | "syncing" | "synced" = isOffline
@@ -45,24 +38,28 @@ export function DashboardPage() {
   const selectedDateRef = useRef<Date>(new Date());
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [loading, setLoading] = useState(false);
-  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const loadDailyFoodLogRef = useRef(loadDailyFoodLog);
 
   useEffect(() => {
     selectedDateRef.current = selectedDate;
   }, [selectedDate]);
 
+  useEffect(() => {
+    loadDailyFoodLogRef.current = loadDailyFoodLog;
+  }, [loadDailyFoodLog]);
+
   const fetchFoodLogsForDate = useCallback(async (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return fetchFoodLogsByDate(dateStr);
+    return loadDailyFoodLogRef.current(dateStr);
   }, []);
 
   const refreshSelectedDateLogs = useCallback(
     async (date?: Date) => {
       try {
-        const logs = await fetchFoodLogsForDate(
+        const dailyLog = await fetchFoodLogsForDate(
           date ?? selectedDateRef.current,
         );
-        setFoodLogs(logs);
+        setFoodLogs(dailyLog.foodLogs);
       } catch {
         // Connectivity/auth fallback is handled in FoodLogManager + context status flags.
       }
@@ -76,37 +73,6 @@ export function DashboardPage() {
     refreshSelectedDateLogs(selectedDate).finally(() => setLoading(false));
   }, [refreshSelectedDateLogs, selectedDate]);
 
-  useEffect(() => {
-    const started = connectFoodLogsWs({
-      onConnectionChange: setRealtimeConnected,
-      onUpdate: async () => {
-        await syncFoodLogQueue();
-        await refreshSelectedDateLogs();
-      },
-    });
-
-    if (!started) {
-      setRealtimeConnected(false);
-    }
-
-    return () => {
-      disconnectFoodLogsWs();
-    };
-  }, [refreshSelectedDateLogs]);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(
-      () => {
-        void refreshSelectedDateLogs();
-      },
-      realtimeConnected ? 5000 : 3000,
-    );
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [realtimeConnected, refreshSelectedDateLogs]);
-
   const totalCalories = foodLogs.reduce((sum, log) => sum + log.calories, 0);
   const totalProtein = foodLogs.reduce((sum, log) => sum + log.protein, 0);
   const totalCarbs = foodLogs.reduce((sum, log) => sum + log.carbs, 0);
@@ -118,14 +84,9 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNav
-        streakDays={streakDays}
-        connectionStatus={connectionStatus}
-        onSettings={() => navigate("/settings")}
-        onLogout={() => navigate("/")}
-      />
+      <TopNav streakDays={streakDays} connectionStatus={connectionStatus} />
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="mx-auto w-full max-w-[480px] px-4 pb-28 pt-6">
         {needsReauth && (
           <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-800">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -151,47 +112,26 @@ export function DashboardPage() {
             {pendingSyncCount > 0 && ` Pending operations: ${pendingSyncCount}`}
           </div>
         )}
-        <div className="bg-white rounded-2xl shadow-sm p-6 md:p-8 mb-6">
+        <div className="bg-white rounded-2xl shadow-sm p-5 mb-6">
           <DateNavigation
             initialDate={selectedDate}
             onDateChange={setSelectedDate}
           />
-          <div className="flex flex-col md:flex-row items-center justify-center gap-24 md:gap-12">
-            <div className="flex-shrink-0 flex justify-center items-center p-6 md:p-8 scale-110">
+          <div className="flex flex-col items-center justify-center gap-10">
+            <div className="flex flex-shrink-0 items-center justify-center p-4">
               <CalorieTracker current={totalCalories} goal={3000} />
             </div>
             <div className="flex flex-col items-center justify-center gap-6">
-              {/* Chart: only on md+ */}
-              <div className="hidden md:block">
-                <MacroProportionChart
-                  protein={totalProtein}
-                  carbs={totalCarbs}
-                  fats={totalFats}
-                  size={200}
-                />
-              </div>
-              {/* MacroDisplay: always visible, but only here on md+ */}
-              <div className="hidden md:block">
-                <MacroDisplay
-                  protein={totalProtein}
-                  carbs={totalCarbs}
-                  fats={totalFats}
-                  layout="horizontal"
-                />
-              </div>
-              {/* MacroDisplay: only on mobile */}
-              <div className="block md:hidden">
-                <MacroDisplay
-                  protein={totalProtein}
-                  carbs={totalCarbs}
-                  fats={totalFats}
-                  layout="horizontal"
-                />
-              </div>
+              <MacroDisplay
+                protein={totalProtein}
+                carbs={totalCarbs}
+                fats={totalFats}
+                layout="horizontal"
+              />
             </div>
           </div>
         </div>
-        <div className="p-6 md:p-8">
+        <div>
           <div className="mb-4">
             <button
               type="button"
@@ -208,13 +148,31 @@ export function DashboardPage() {
               foodLogs={foodLogs}
               groups={selectedDateGroups}
               selectedDate={selectedDateStr}
+              onDeleteFoodLog={(id) => {
+                void deleteFoodLog(id)
+                  .then(() => refreshSelectedDateLogs())
+                  .catch(() => null);
+              }}
               onCreateGroup={(name) =>
-                createFoodLogGroup(selectedDateStr, name)
+                createFoodLogGroup(selectedDateStr, name).then((groupId) => {
+                  void refreshSelectedDateLogs();
+                  return groupId;
+                })
               }
-              onRenameGroup={updateFoodLogGroup}
-              onDeleteGroup={deleteFoodLogGroup}
+              onRenameGroup={(groupId, name) =>
+                updateFoodLogGroup(groupId, name).then(() =>
+                  refreshSelectedDateLogs(),
+                )
+              }
+              onDeleteGroup={(groupId) =>
+                deleteFoodLogGroup(groupId).then(() =>
+                  refreshSelectedDateLogs(),
+                )
+              }
               onAssignLogToGroup={(foodLogId, groupId) =>
-                assignFoodLogToGroup(selectedDateStr, foodLogId, groupId)
+                assignFoodLogToGroup(selectedDateStr, foodLogId, groupId).then(
+                  () => refreshSelectedDateLogs(),
+                )
               }
               getGroupForLog={(foodLogId) =>
                 getFoodLogGroupForLog(selectedDateStr, foodLogId)
@@ -232,7 +190,7 @@ export function DashboardPage() {
       </main>
 
       {/* <GeneratorControls defaultDate={format(selectedDate, "yyyy-MM-dd")} /> */}
-      <BottomNav navigate={navigate} />
+      <BottomNav navigate={navigate} currentPath={location.pathname} />
     </div>
   );
 }

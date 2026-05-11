@@ -1,4 +1,5 @@
 import type {
+  DailyFoodLogEntity,
   FoodLogEntity,
   FoodLogPageEntity,
   FoodLogPayload,
@@ -10,6 +11,7 @@ import {
   addLogGroupOnline as addLogGroupRepository,
   deleteFoodLogOnline as deleteFoodLogRepository,
   deleteLogGroupOnline as deleteLogGroupRepository,
+  fetchDailyFoodLogGraphql,
   fetchFoodLogsByDateGraphql as fetchFoodLogsByDateGraphqlRepository,
   fetchFoodLogsByDateOnline as fetchFoodLogsByDateRepository,
   fetchFoodLogsOnline as fetchFoodLogsRepository,
@@ -345,6 +347,10 @@ async function fetchFoodLogsByDateOnline(date: string) {
 
 async function fetchFoodLogsByDateGraphql(date: string) {
   return runOnline(() => fetchFoodLogsByDateGraphqlRepository(date));
+}
+
+async function fetchDailyFoodLogOnline(date: string) {
+  return runOnline(() => fetchDailyFoodLogGraphql(date));
 }
 
 async function addFoodLogOnline(
@@ -744,6 +750,38 @@ export async function fetchFoodLogsByDate(date: string) {
     const dateCache = readDateCache(date);
     if (dateCache.length > 0) return dateCache;
     return readCache().filter((log) => log.date === date);
+  }
+}
+
+export async function fetchDailyFoodLog(date: string): Promise<DailyFoodLogEntity> {
+  try {
+    await syncFoodLogQueue();
+    const dailyLog = await fetchDailyFoodLogOnline(date);
+
+    const cache = readCache().filter((log) => log.date !== date || log.id < 0);
+    writeCache([...cache, ...dailyLog.foodLogs]);
+    writeDateCache(date, dailyLog.foodLogs);
+
+    const groupsOutsideDate = readLogGroupCache().filter(
+      (group) => group.date !== date || group.id < 0,
+    );
+    writeLogGroupCache([...groupsOutsideDate, ...dailyLog.logGroups]);
+
+    return dailyLog;
+  } catch (err) {
+    if (!isRecoverableLocalError(err)) throw err;
+    setBackendReachable(false);
+    setAuthRequired(isAuthError(err));
+
+    const dateCache = readDateCache(date);
+    return {
+      date,
+      foodLogs:
+        dateCache.length > 0
+          ? dateCache
+          : readCache().filter((log) => log.date === date),
+      logGroups: readLogGroupCache().filter((group) => group.date === date),
+    };
   }
 }
 

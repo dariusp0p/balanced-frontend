@@ -4,9 +4,11 @@ import {
   useState,
   ReactNode,
   useEffect,
+  useRef,
 } from "react";
 import {
   fetchFoodLogs,
+  fetchDailyFoodLog,
   fetchLogGroupsApi,
   createLogGroupApi,
   updateLogGroupApi,
@@ -42,6 +44,9 @@ type FoodLogContextType = {
     groupId: number | null,
   ) => Promise<void>;
   getFoodLogGroupForLog: (date: string, foodLogId: number) => number | null;
+  loadDailyFoodLog: (
+    date: string,
+  ) => Promise<{ foodLogs: FoodLog[]; foodLogGroups: FoodLogGroup[] }>;
   refreshFoodLogs: () => Promise<void>;
   syncPendingChanges: () => Promise<void>;
 };
@@ -62,6 +67,12 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
   );
   const [needsReauth, setNeedsReauth] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const inFlightDailyLoadsRef = useRef(
+    new Map<
+      string,
+      Promise<{ foodLogs: FoodLog[]; foodLogGroups: FoodLogGroup[] }>
+    >(),
+  );
 
   const refreshPendingCount = () => {
     setPendingSyncCount(getPendingFoodLogSyncCount());
@@ -79,6 +90,20 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
   const syncPendingChanges = async () => {
     await syncFoodLogQueue();
     refreshPendingCount();
+  };
+
+  const mergeDailyFoodLogs = (date: string, logs: FoodLog[]) => {
+    setFoodLogs((prev) => [
+      ...prev.filter((log) => log.date !== date || log.id < 0),
+      ...logs,
+    ]);
+  };
+
+  const mergeDailyFoodLogGroups = (date: string, groups: FoodLogGroup[]) => {
+    setFoodLogGroups((prev) => [
+      ...prev.filter((group) => group.date !== date || group.id < 0),
+      ...groups,
+    ]);
   };
 
   const refreshFoodLogs = async () => {
@@ -160,6 +185,41 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
     await refreshFoodLogs();
   };
 
+  const loadDailyFoodLog = async (date: string) => {
+    const inFlight = inFlightDailyLoadsRef.current.get(date);
+    if (inFlight) return inFlight;
+
+    const promise = (async () => {
+      try {
+        await syncPendingChanges();
+        const dailyLog = await fetchDailyFoodLog(date);
+        mergeDailyFoodLogs(date, dailyLog.foodLogs);
+        mergeDailyFoodLogGroups(date, dailyLog.logGroups);
+        refreshStatusFlags();
+        return {
+          foodLogs: dailyLog.foodLogs,
+          foodLogGroups: dailyLog.logGroups,
+        };
+      } catch {
+        refreshStatusFlags();
+        const fallbackLogs = foodLogs.filter((log) => log.date === date);
+        const fallbackGroups = foodLogGroups.filter(
+          (group) => group.date === date,
+        );
+        return {
+          foodLogs: fallbackLogs,
+          foodLogGroups: fallbackGroups,
+        };
+      } finally {
+        refreshPendingCount();
+        inFlightDailyLoadsRef.current.delete(date);
+      }
+    })();
+
+    inFlightDailyLoadsRef.current.set(date, promise);
+    return promise;
+  };
+
   const updateFoodLog = async (id: number, updated: Omit<FoodLog, "id">) => {
     await updateFoodLogApi(id, updated);
     refreshPendingCount();
@@ -177,6 +237,7 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
     const created = await createLogGroupApi({
       name: trimmedName,
       date,
+      mealType: "CUSTOM",
       computeFromFoodLogs: true,
       totalCalories: 0,
       totalProtein: 0,
@@ -195,6 +256,7 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
     await updateLogGroupApi(groupId, {
       name: trimmedName,
       date: existingGroup.date,
+      mealType: existingGroup.mealType ?? "CUSTOM",
       computeFromFoodLogs: true,
       totalCalories: existingGroup.totalCalories ?? 0,
       totalProtein: existingGroup.totalProtein ?? 0,
@@ -256,6 +318,7 @@ export function FoodLogProvider({ children }: { children: ReactNode }) {
         deleteFoodLogGroup,
         assignFoodLogToGroup,
         getFoodLogGroupForLog,
+        loadDailyFoodLog,
         refreshFoodLogs,
         syncPendingChanges,
       }}

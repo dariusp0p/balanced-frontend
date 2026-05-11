@@ -6,6 +6,9 @@ import { LogFoodPage } from "../features/food/views/AddFoodLogPage";
 import { InfiniteFoodLogsPage } from "../features/food/views/InfiniteFoodLogsPage";
 import { FoodDetailPage } from "../features/food/views/FoodDetailPage";
 import { CameraCapture } from "../features/food/views/CameraCapture";
+import { FriendsPage } from "../features/friends/views/FriendsPage";
+import { SettingsPage } from "../features/settings/views/SettingsPage";
+import { AppLogsPage } from "../features/admin/views/AppLogsPage";
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +22,18 @@ export const router = createBrowserRouter([
   {
     path: "/dashboard",
     Component: DashboardPage,
+  },
+  {
+    path: "/friends",
+    Component: FriendsPage,
+  },
+  {
+    path: "/settings",
+    Component: SettingsPage,
+  },
+  {
+    path: "/admin/logs",
+    Component: AppLogsPage,
   },
   {
     path: "/camera",

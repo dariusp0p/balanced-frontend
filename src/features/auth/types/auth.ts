@@ -13,5 +13,12 @@ export type SignupPayload = {
 export type AuthResponse = {
   token?: string;
   userId?: number | string;
+  user?: {
+    id: number | string;
+    name: string;
+    email: string;
+    admin?: boolean;
+    roles?: string[];
+  };
   message?: string;
 };

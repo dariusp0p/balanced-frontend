@@ -1,4 +1,5 @@
 import type {
+  DailyFoodLogEntity,
   FoodLogEntity,
   FoodLogPageEntity,
   FoodLogPayload,
@@ -203,6 +204,73 @@ export async function fetchFoodLogsByDateGraphql(
     carbs: Number(log.carbs),
     fats: Number(log.fats),
   }));
+}
+
+export async function fetchDailyFoodLogGraphql(
+  date: string,
+): Promise<DailyFoodLogEntity> {
+  const query = `
+    query DailyLog($date: String!) {
+      dailyLog(date: $date) {
+        date
+        foodLogs {
+          id
+          logGroupId
+          name
+          date
+          time
+          calories
+          protein
+          carbs
+          fats
+        }
+        logGroups {
+          id
+          name
+          mealType
+          date
+          computeFromFoodLogs
+          totalCalories
+          totalProtein
+          totalCarbs
+          totalFats
+        }
+      }
+    }
+  `;
+
+  const data = await runGraphqlQuery<{ dailyLog: DailyFoodLogEntity }>(query, {
+    date,
+  });
+
+  return {
+    date: data.dailyLog.date,
+    foodLogs: (data.dailyLog.foodLogs || []).map((log) => ({
+      id: Number(log.id),
+      logGroupId:
+        log.logGroupId === null || typeof log.logGroupId === "undefined"
+          ? null
+          : Number(log.logGroupId),
+      name: log.name,
+      date: log.date,
+      time: log.time,
+      calories: Number(log.calories),
+      protein: Number(log.protein),
+      carbs: Number(log.carbs),
+      fats: Number(log.fats),
+    })),
+    logGroups: (data.dailyLog.logGroups || []).map((group) => ({
+      id: Number(group.id),
+      name: group.name,
+      mealType: group.mealType,
+      date: group.date,
+      computeFromFoodLogs: Boolean(group.computeFromFoodLogs),
+      totalCalories: Number(group.totalCalories),
+      totalProtein: Number(group.totalProtein),
+      totalCarbs: Number(group.totalCarbs),
+      totalFats: Number(group.totalFats),
+    })),
+  };
 }
 
 export async function addFoodLogOnline(

@@ -18,6 +18,7 @@ export type FoodLogGroup = {
   id: number;
   date: string;
   name: string;
+  mealType?: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "CUSTOM";
   totalCalories?: number;
   totalProtein?: number;
   totalCarbs?: number;
@@ -27,6 +28,7 @@ export type FoodLogGroup = {
 
 export type LogGroupPayload = {
   name: string;
+  mealType?: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "CUSTOM";
   date: string;
   computeFromFoodLogs: boolean;
   totalCalories: number;
@@ -45,4 +47,10 @@ export type FoodLogPageEntity = {
   size: number;
   totalElements: number;
   totalPages: number;
+};
+
+export type DailyFoodLogEntity = {
+  date: string;
+  foodLogs: FoodLogEntity[];
+  logGroups: LogGroupEntity[];
 };

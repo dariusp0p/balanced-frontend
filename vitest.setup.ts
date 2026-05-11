@@ -40,6 +40,40 @@ const foodLogManagerMock = vi.hoisted(() => {
     fetchFoodLogsByDate: vi.fn(async (date: string) =>
       foodLogs.filter((log) => log.date === date).map((log) => ({ ...log })),
     ),
+    fetchDailyFoodLog: vi.fn(async (date: string) => {
+      const dailyLogs = foodLogs
+        .filter((log) => log.date === date)
+        .map((log) => ({ ...log }));
+      const dailyGroups = foodLogGroups
+        .filter((group) => group.date === date)
+        .map((group) => ({ ...group }));
+
+      if (dailyLogs.length === 0 && dailyGroups.length === 0) {
+        const defaults = [
+          { name: "Breakfast", mealType: "BREAKFAST" },
+          { name: "Lunch", mealType: "LUNCH" },
+          { name: "Dinner", mealType: "DINNER" },
+          { name: "Snacks", mealType: "SNACK" },
+        ].map((group) => ({
+          id: groupId++,
+          date,
+          computeFromFoodLogs: true,
+          totalCalories: 0,
+          totalProtein: 0,
+          totalCarbs: 0,
+          totalFats: 0,
+          ...group,
+        }));
+        foodLogGroups = [...foodLogGroups, ...defaults];
+        dailyGroups.push(...defaults);
+      }
+
+      return {
+        date,
+        foodLogs: dailyLogs,
+        logGroups: dailyGroups,
+      };
+    }),
     fetchFoodLogsPageApi: vi.fn(async (page: number, size: number) => ({
       content: foodLogs
         .slice(page * size, page * size + size)

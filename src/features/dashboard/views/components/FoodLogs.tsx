@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { FoodLogItem } from "./FoodLogItem";
 import { LogGroup } from "./LogGroup";
-import { useFoodLogs } from "../../../food/store/FoodLogContext";
 import type { FoodLog, FoodLogGroup } from "../../../food/types/foodLog";
 
 interface FoodLogsProps {
   foodLogs: FoodLog[];
   groups: FoodLogGroup[];
   selectedDate: string;
+  onDeleteFoodLog: (id: number) => void;
   onCreateGroup: (name: string) => Promise<number>;
   onRenameGroup: (groupId: number, name: string) => Promise<void>;
   onDeleteGroup: (groupId: number) => Promise<void>;
@@ -23,6 +23,7 @@ export function FoodLogs({
   foodLogs,
   groups,
   selectedDate,
+  onDeleteFoodLog,
   onCreateGroup,
   onRenameGroup,
   onDeleteGroup,
@@ -30,7 +31,6 @@ export function FoodLogs({
   getGroupForLog,
   onAdd,
 }: FoodLogsProps) {
-  const { deleteFoodLog } = useFoodLogs();
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
@@ -100,7 +100,7 @@ export function FoodLogs({
           className="animate-fade-in-up"
           style={{ animationDelay: `${idx * 120}ms` }}
         >
-          <FoodLogItem {...log} onDelete={deleteFoodLog} />
+          <FoodLogItem {...log} onDelete={onDeleteFoodLog} />
           {renderGroupSelector(log.id)}
         </div>
       ))}
@@ -214,7 +214,7 @@ export function FoodLogs({
               onDeleteGroup={onDeleteGroup}
               onAssignLogToGroup={onAssignLogToGroup}
               getGroupForLog={getGroupForLog}
-              onDeleteFoodLog={deleteFoodLog}
+              onDeleteFoodLog={onDeleteFoodLog}
               onAddFoodLog={(groupId) => onAdd(groupId)}
             />
           );
