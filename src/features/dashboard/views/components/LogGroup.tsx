@@ -33,6 +33,10 @@ function formatGroupTotals(logs: FoodLog[]) {
   );
 }
 
+function formatMacro(value: number) {
+  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
+
 export function LogGroup({
   group,
   logs,
@@ -91,9 +95,9 @@ export function LogGroup({
         </div>
         <div className="flex items-center gap-3 text-xs font-medium text-orange">
           <span>{totals.calories} cals</span>
-          <span>P {totals.protein}g</span>
-          <span>C {totals.carbs}g</span>
-          <span>F {totals.fats}g</span>
+          <span>P {formatMacro(totals.protein)}g</span>
+          <span>C {formatMacro(totals.carbs)}g</span>
+          <span>F {formatMacro(totals.fats)}g</span>
         </div>
       </div>
 
