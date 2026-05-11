@@ -84,7 +84,12 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNav streakDays={streakDays} connectionStatus={connectionStatus} />
+      <TopNav
+        streakDays={streakDays}
+        connectionStatus={connectionStatus}
+        navigate={navigate}
+        currentPath={location.pathname}
+      />
 
       <main className="mx-auto w-full max-w-[480px] px-4 pb-28 pt-6">
         {needsReauth && (
@@ -132,7 +137,7 @@ export function DashboardPage() {
           </div>
         </div>
         <div>
-          <div className="mb-4">
+          {/* <div className="mb-4">
             <button
               type="button"
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
@@ -140,7 +145,7 @@ export function DashboardPage() {
             >
               Open Infinite Scroll Demo
             </button>
-          </div>
+          </div> */}
           {loading ? (
             <div className="text-center text-gray-500">Loading...</div>
           ) : (
@@ -180,8 +185,8 @@ export function DashboardPage() {
               onAdd={(groupId) =>
                 navigate(
                   groupId
-                    ? `/log-food?mode=manual&groupId=${groupId}`
-                    : "/log-food?mode=manual",
+                    ? `/log-food?mode=manual&date=${selectedDateStr}&groupId=${groupId}`
+                    : `/log-food?mode=manual&date=${selectedDateStr}`,
                 )
               }
             />
@@ -190,7 +195,12 @@ export function DashboardPage() {
       </main>
 
       {/* <GeneratorControls defaultDate={format(selectedDate, "yyyy-MM-dd")} /> */}
-      <BottomNav navigate={navigate} currentPath={location.pathname} />
+      <BottomNav
+        navigate={navigate}
+        currentPath={location.pathname}
+        streakDays={streakDays}
+        connectionStatus={connectionStatus}
+      />
     </div>
   );
 }

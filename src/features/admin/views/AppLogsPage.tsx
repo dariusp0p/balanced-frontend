@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Eye, ScrollText } from "lucide-react";
 
 import { BottomNav } from "../../dashboard/views/components/BottomNav";
+import { useFoodLogs } from "../../food/store/FoodLogContext";
 import {
   fetchAppLogs,
   fetchObservedUsers,
@@ -12,9 +13,16 @@ import type { AppActionLog, ObservedUser } from "../types/audit";
 export function AppLogsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOffline, pendingSyncCount } = useFoodLogs();
   const [logs, setLogs] = useState<AppActionLog[]>([]);
   const [observedUsers, setObservedUsers] = useState<ObservedUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const streakDays = 12; // Mock streak data
+  const connectionStatus: "offline" | "syncing" | "synced" = isOffline
+    ? "offline"
+    : pendingSyncCount > 0
+      ? "syncing"
+      : "synced";
 
   useEffect(() => {
     Promise.all([fetchAppLogs(), fetchObservedUsers()])
@@ -106,7 +114,12 @@ export function AppLogsPage() {
         </section>
       </main>
 
-      <BottomNav navigate={navigate} currentPath={location.pathname} />
+      <BottomNav
+        navigate={navigate}
+        currentPath={location.pathname}
+        streakDays={streakDays}
+        connectionStatus={connectionStatus}
+      />
     </div>
   );
 }

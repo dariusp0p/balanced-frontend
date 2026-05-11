@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { ArrowLeft, Send, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Send, Users } from "lucide-react";
 
 import { BottomNav } from "../../dashboard/views/components/BottomNav";
+import { TopNav } from "../../dashboard/views/components/TopNav";
+import { useFoodLogs } from "../../food/store/FoodLogContext";
 import {
   fetchConversation,
   fetchUsers,
@@ -30,13 +32,22 @@ function createTempId() {
 export function FriendsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOffline, pendingSyncCount } = useFoodLogs();
   const listEndRef = useRef<HTMLDivElement | null>(null);
+  const hasScrolledToLatestRef = useRef(false);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const me = currentUserId();
+  const streakDays = 12; // Mock streak data
+  const connectionStatus: "offline" | "syncing" | "synced" = isOffline
+    ? "offline"
+    : pendingSyncCount > 0
+      ? "syncing"
+      : "synced";
+  const isConversation = Boolean(selectedUser);
 
   useEffect(() => {
     fetchUsers()
@@ -80,11 +91,14 @@ export function FriendsPage() {
 
   useEffect(() => {
     if (!selectedUser) return;
+    hasScrolledToLatestRef.current = false;
     fetchConversation(selectedUser.id).then(setMessages);
   }, [selectedUser]);
 
   useEffect(() => {
-    listEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const behavior = hasScrolledToLatestRef.current ? "smooth" : "auto";
+    listEndRef.current?.scrollIntoView({ behavior });
+    hasScrolledToLatestRef.current = true;
   }, [messages.length]);
 
   const title = selectedUser ? selectedUser.name : "Friends";
@@ -109,7 +123,7 @@ export function FriendsPage() {
 
     const tempId = createTempId();
     const optimisticMessage: ChatMessage = {
-      id: -1,
+      id: tempId,
       senderId: me,
       senderName: "",
       receiverId: selectedUser.id,
@@ -132,40 +146,22 @@ export function FriendsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-dark-blue px-4 py-4 text-white">
-        <div className="mx-auto flex w-full max-w-[480px] items-center justify-between gap-3">
-          {selectedUser ? (
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10"
-              aria-label="Back to friends"
-              onClick={() => setSelectedUser(null)}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-          ) : null}
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            {selectedUser ? (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan text-dark-blue">
-                {initials}
-              </div>
-            ) : null}
-            <h1 className="truncate text-xl font-semibold">{title}</h1>
-          </div>
-          {!selectedUser ? (
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 transition-colors hover:bg-white/15"
-              aria-label="Add friend"
-              title="Add friend"
-            >
-              <UserPlus className="h-5 w-5" />
-            </button>
-          ) : null}
-        </div>
-      </header>
+      {!isConversation ? (
+        <TopNav
+          streakDays={streakDays}
+          connectionStatus={connectionStatus}
+          navigate={navigate}
+          currentPath={location.pathname}
+        />
+      ) : null}
 
-      <main className="mx-auto flex min-h-[calc(100vh-72px)] w-full max-w-[480px] flex-col px-4 pb-28 pt-6">
+      <main
+        className={
+          isConversation
+            ? "mx-auto flex min-h-[100svh] w-full max-w-none flex-col px-0 pb-0 pt-0 sm:max-w-[480px] sm:px-4 sm:pb-28 sm:pt-6"
+            : "mx-auto flex min-h-screen w-full max-w-[480px] flex-col px-4 pb-28 pt-6"
+        }
+      >
         {!selectedUser ? (
           <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
             {loading ? (
@@ -212,8 +208,26 @@ export function FriendsPage() {
             )}
           </section>
         ) : (
-          <section className="flex min-h-[calc(100vh-160px)] flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-sm">
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          <section className="flex min-h-[100svh] min-h-0 flex-1 flex-col rounded-none bg-white shadow-none sm:min-h-[calc(100vh-160px)] sm:rounded-2xl sm:shadow-sm">
+            <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-100 bg-white px-4 py-3">
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-dark-blue/5 text-dark-blue transition-colors hover:bg-dark-blue/10"
+                aria-label="Back to friends"
+                onClick={() => setSelectedUser(null)}
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan text-dark-blue">
+                  {initials}
+                </div>
+                <h1 className="truncate text-base font-semibold text-dark-blue">
+                  {title}
+                </h1>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
               {messages.map((message) => {
                 const mine = message.senderId === me;
                 return (
@@ -262,7 +276,14 @@ export function FriendsPage() {
         )}
       </main>
 
-      <BottomNav navigate={navigate} currentPath={location.pathname} />
+      {!isConversation ? (
+        <BottomNav
+          navigate={navigate}
+          currentPath={location.pathname}
+          streakDays={streakDays}
+          connectionStatus={connectionStatus}
+        />
+      ) : null}
     </div>
   );
 }
