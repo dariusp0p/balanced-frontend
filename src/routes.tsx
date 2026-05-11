@@ -3,6 +3,7 @@ import { LoginPage } from "./features/auth/login-page";
 import { SignupPage } from "./features/auth/signup-page";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { LogFoodPage } from "./features/food/AddFoodLogPage";
+import { InfiniteFoodLogsPage } from "./features/food/InfiniteFoodLogsPage";
 import { FoodDetailPage } from "./components/food-detail-page";
 import { CameraCapture } from "./components/camera-capture";
 
@@ -34,5 +35,9 @@ export const router = createBrowserRouter([
   {
     path: "/log-food",
     Component: LogFoodPage,
+  },
+  {
+    path: "/infinite-food-logs",
+    Component: InfiniteFoodLogsPage,
   },
 ]);

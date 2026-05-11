@@ -10,6 +10,11 @@ export function LogFoodPage() {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const editId = params.get("edit");
+  const groupIdParam = params.get("groupId");
+  const parsedGroupIdParam = groupIdParam ? Number(groupIdParam) : null;
+  const selectedGroupId = Number.isFinite(parsedGroupIdParam)
+    ? parsedGroupIdParam
+    : null;
   const { foodLogs, addFoodLog, updateFoodLog } = useFoodLogs();
   const foodToEdit = editId
     ? foodLogs.find((log) => log.id === Number(editId))
@@ -47,10 +52,12 @@ export function LogFoodPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const effectiveGroupId = selectedGroupId ?? foodToEdit?.logGroupId ?? null;
     const parsed = foodLogSchema.safeParse({
       name: form.name,
       date: form.date,
       time: form.time,
+      logGroupId: effectiveGroupId,
       calories: Number(form.calories),
       protein: Number(form.protein),
       carbs: Number(form.carbs),

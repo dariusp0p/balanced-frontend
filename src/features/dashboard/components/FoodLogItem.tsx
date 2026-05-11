@@ -1,5 +1,5 @@
-import { Link } from "react-router";
-import { Trash2 } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { Trash2, Edit2 } from "lucide-react";
 
 interface FoodLogItemProps {
   id: number;
@@ -22,9 +22,18 @@ export function FoodLogItem({
   fats,
   onDelete,
 }: FoodLogItemProps) {
+  const navigate = useNavigate();
+
   const handleDelete = (e: React.MouseEvent) => {
     e.preventDefault();
-    onDelete(id);
+    if (window.confirm("Are you sure you want to delete this food log?")) {
+      onDelete(id);
+    }
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(`/log-food?edit=${id}`);
   };
 
   return (
@@ -55,6 +64,14 @@ export function FoodLogItem({
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={handleEdit}
+          className="ml-2 p-2 rounded hover:bg-blue-100 group"
+          title="Edit"
+        >
+          <Edit2 className="text-gray-400 group-hover:text-blue-600 transition-colors" />
+        </button>
         <button
           type="button"
           data-testid="delete-food-log"

@@ -4,6 +4,8 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 
+const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+
 export function SignupPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -12,20 +14,30 @@ export function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    setError("");
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
-
-    // mock registration
-    setError("");
-    localStorage.setItem("registeredUserEmail", email);
-    localStorage.setItem("registeredUserPassword", password);
-    localStorage.setItem("isAuthenticated", "true");
-    navigate("/dashboard");
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, confirmPassword }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || "Registration failed");
+        return;
+      }
+      // Optionally store token/session here
+      localStorage.setItem("isAuthenticated", "true");
+      navigate("/dashboard");
+    } catch (err) {
+      setError("Network error. Please try again.");
+    }
   };
 
   return (
@@ -120,7 +132,7 @@ export function SignupPage() {
                 to="/"
                 className="text-[#E89B7E] hover:underline font-medium"
               >
-                Sign in
+                Log in
               </Link>
             </p>
           </div>
