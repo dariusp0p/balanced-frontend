@@ -1,4 +1,5 @@
 import { Client, type IMessage, type StompSubscription } from "@stomp/stompjs";
+import { getBrokerUrl } from "../../../shared/services/backend";
 
 type WsHandlers = {
   onUpdate: (payload: unknown) => void | Promise<void>;
@@ -39,20 +40,6 @@ function readUserIdFromToken(): number | null {
   return Number.isFinite(userId) ? userId : null;
 }
 
-function getBrokerUrl() {
-  const backendBaseUrl = (import.meta as any).env?.VITE_BACKEND_BASE_URL as
-    | string
-    | undefined;
-  if (!backendBaseUrl) return null;
-
-  const url = new URL(backendBaseUrl);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.pathname = "/ws";
-  url.search = "";
-  url.hash = "";
-  return url.toString();
-}
-
 function parseFrameBody(frame: IMessage) {
   try {
     return JSON.parse(frame.body);
@@ -67,11 +54,6 @@ export function connectFoodLogsWs({
 }: WsHandlers) {
   const brokerURL = getBrokerUrl();
   const userId = readUserIdFromToken();
-
-  if (!brokerURL) {
-    onConnectionChange?.(false);
-    return false;
-  }
 
   disconnectFoodLogsWs();
 

@@ -6,10 +6,7 @@ import type {
   LogGroupEntity,
   LogGroupPayload,
 } from "../types/foodLog";
-
-const BACKEND_BASE_URL = (import.meta as any).env?.VITE_BACKEND_BASE_URL as
-  | string
-  | undefined;
+import { resolveBackendUrl } from "../../../shared/services/backend";
 const GRAPHQL_ENDPOINT = "/graphql";
 
 let supportsClientMutationHeader = true;
@@ -70,16 +67,9 @@ function createHttpError(status: number, message: string) {
   return error;
 }
 
-function ensureBackendUrl() {
-  if (!BACKEND_BASE_URL) {
-    throw new Error("Missing VITE_BACKEND_BASE_URL");
-  }
-  return BACKEND_BASE_URL;
-}
-
 export async function fetchFoodLogsOnline(): Promise<FoodLogEntity[]> {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs?page=0&size=100`,
+    resolveBackendUrl("/api/food-logs?page=0&size=100"),
   );
   if (!res.ok) throw createHttpError(res.status, "Failed to fetch food logs");
   const data = await res.json();
@@ -96,7 +86,7 @@ export async function fetchFoodLogsPageOnline(
   });
 
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs?${params.toString()}`,
+    resolveBackendUrl(`/api/food-logs?${params.toString()}`),
   );
   if (!res.ok) {
     throw createHttpError(res.status, "Failed to fetch paged food logs");
@@ -118,7 +108,7 @@ export async function fetchFoodLogsByDateOnline(
 ): Promise<FoodLogEntity[]> {
   const params = new URLSearchParams({ date });
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/day?${params.toString()}`,
+    resolveBackendUrl(`/api/food-logs/day?${params.toString()}`),
   );
   if (!res.ok) {
     throw createHttpError(res.status, "Failed to fetch food logs for date");
@@ -143,7 +133,7 @@ async function runGraphqlQuery<T>(
   variables: Record<string, unknown>,
 ): Promise<T> {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}${GRAPHQL_ENDPOINT}`,
+    resolveBackendUrl(GRAPHQL_ENDPOINT),
     {
       method: "POST",
       body: JSON.stringify({ query, variables }),
@@ -282,7 +272,7 @@ export async function addFoodLogOnline(
   clientMutationId?: string,
 ): Promise<FoodLogEntity> {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs`,
+    resolveBackendUrl("/api/food-logs"),
     {
       method: "POST",
       body: JSON.stringify(log),
@@ -299,7 +289,7 @@ export async function updateFoodLogOnline(
   clientMutationId?: string,
 ): Promise<FoodLogEntity> {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/${id}`,
+    resolveBackendUrl(`/api/food-logs/${id}`),
     {
       method: "PUT",
       body: JSON.stringify(log),
@@ -315,7 +305,7 @@ export async function deleteFoodLogOnline(
   clientMutationId?: string,
 ) {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/${id}`,
+    resolveBackendUrl(`/api/food-logs/${id}`),
     {
       method: "DELETE",
       clientMutationId,
@@ -326,7 +316,7 @@ export async function deleteFoodLogOnline(
 
 export async function fetchLogGroupsOnline(): Promise<LogGroupEntity[]> {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups?page=0&size=100`,
+    resolveBackendUrl("/api/log-groups?page=0&size=100"),
   );
   if (!res.ok) {
     throw createHttpError(res.status, "Failed to fetch log groups");
@@ -340,7 +330,7 @@ export async function addLogGroupOnline(
   clientMutationId?: string,
 ): Promise<LogGroupEntity> {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups`,
+    resolveBackendUrl("/api/log-groups"),
     {
       method: "POST",
       body: JSON.stringify(payload),
@@ -359,7 +349,7 @@ export async function updateLogGroupOnline(
   clientMutationId?: string,
 ): Promise<LogGroupEntity> {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups/${id}`,
+    resolveBackendUrl(`/api/log-groups/${id}`),
     {
       method: "PUT",
       body: JSON.stringify(payload),
@@ -377,7 +367,7 @@ export async function deleteLogGroupOnline(
   clientMutationId?: string,
 ) {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/log-groups/${id}`,
+    resolveBackendUrl(`/api/log-groups/${id}`),
     {
       method: "DELETE",
       clientMutationId,
@@ -394,7 +384,7 @@ export async function startFoodLogGeneratorOnline(
   intervalMs = 2000,
 ) {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/generator/start`,
+    resolveBackendUrl("/api/food-logs/generator/start"),
     {
       method: "POST",
       body: JSON.stringify({ date, batchSize, intervalMs }),
@@ -406,7 +396,7 @@ export async function startFoodLogGeneratorOnline(
 
 export async function stopFoodLogGeneratorOnline() {
   const res = await fetchWithOptionalMutationHeader(
-    `${ensureBackendUrl()}/api/food-logs/generator/stop`,
+    resolveBackendUrl("/api/food-logs/generator/stop"),
     {
       method: "POST",
     },

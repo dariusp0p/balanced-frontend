@@ -1,5 +1,5 @@
 import { Client, type IMessage, type StompSubscription } from "@stomp/stompjs";
-import { getBrokerUrl } from "../../../shared/services/apiClient";
+import { getBrokerUrl } from "../../../shared/services/backend";
 import type { ChatMessage } from "../types/chat";
 
 let client: Client | null = null;
@@ -18,7 +18,6 @@ export function connectChatRealtime(
   onMessage: (message: ChatMessage) => void,
 ) {
   const brokerURL = getBrokerUrl();
-  if (!brokerURL) return false;
 
   disconnectChatRealtime();
 

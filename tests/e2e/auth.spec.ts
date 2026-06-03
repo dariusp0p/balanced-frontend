@@ -7,6 +7,7 @@ test.describe("Authentication", () => {
     await page.fill('input[name="name"]', "New User");
     await page.fill('input[name="email"]', "newuser@example.com");
     await page.fill('input[name="password"]', "password123");
+    await page.fill('input[name="recoveryAnswer"]', "pizza");
     await page.fill('input[name="confirmPassword"]', "password123");
     await page.click('button[type="submit"]');
 
@@ -32,5 +33,11 @@ test.describe("Authentication", () => {
 
     await expect(page.getByRole("alert")).toBeVisible();
     await expect(page.getByText(/invalid email or password/i)).toBeVisible();
+  });
+
+  test("User can open password recovery flow", async ({ page }) => {
+    await page.goto("http://localhost:5173/");
+    await page.click('button[type="button"]');
+    await expect(page).toHaveURL(/forgot-password/);
   });
 });

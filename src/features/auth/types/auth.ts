@@ -8,10 +8,30 @@ export type SignupPayload = {
   email: string;
   password: string;
   confirmPassword: string;
+  recoveryQuestion: string;
+  recoveryAnswer: string;
+};
+
+export type RecoveryQuestionPayload = {
+  email: string;
+};
+
+export type RecoveryQuestionResponse = {
+  message?: string;
+  recoveryQuestion: string;
+};
+
+export type PasswordRecoveryPayload = {
+  email: string;
+  recoveryAnswer: string;
+  newPassword: string;
+  confirmPassword: string;
 };
 
 export type AuthResponse = {
   token?: string;
+  tokenType?: string;
+  expiresAt?: string;
   userId?: number | string;
   user?: {
     id: number | string;

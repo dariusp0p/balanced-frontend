@@ -1,4 +1,4 @@
-const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+import { resolveBackendUrl } from "./backend";
 
 export function getAuthHeaders() {
   const token = localStorage.getItem("authToken");
@@ -12,7 +12,7 @@ export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const res = await fetch(`${BACKEND_BASE_URL}${path}`, {
+  const res = await fetch(resolveBackendUrl(path), {
     ...options,
     headers: {
       ...getAuthHeaders(),
@@ -26,14 +26,4 @@ export async function apiRequest<T>(
   }
 
   return data as T;
-}
-
-export function getBrokerUrl() {
-  if (!BACKEND_BASE_URL) return null;
-  const url = new URL(BACKEND_BASE_URL);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.pathname = "/ws";
-  url.search = "";
-  url.hash = "";
-  return url.toString();
 }
