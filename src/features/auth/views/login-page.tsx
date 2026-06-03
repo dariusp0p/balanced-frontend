@@ -78,6 +78,7 @@ export function LoginPage() {
           <button
             type="button"
             className="w-full text-sm text-gray-700 hover:underline text-left"
+            onClick={() => navigate("/forgot-password")}
           >
             Forgot password?
           </button>

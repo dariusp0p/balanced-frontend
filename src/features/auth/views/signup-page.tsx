@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router";
 import { Button } from "../../../shared/views/ui/button";
 import { Input } from "../../../shared/views/ui/input";
 import { Label } from "../../../shared/views/ui/label";
+import { recoveryQuestions } from "../constants/recoveryQuestions";
 import { signup } from "../services/AuthManager";
 
 export function SignupPage() {
@@ -11,6 +12,8 @@ export function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [recoveryQuestion, setRecoveryQuestion] = useState(recoveryQuestions[0]);
+  const [recoveryAnswer, setRecoveryAnswer] = useState("");
   const [error, setError] = useState("");
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -21,7 +24,14 @@ export function SignupPage() {
       return;
     }
     try {
-      await signup({ name, email, password, confirmPassword });
+      await signup({
+        name,
+        email,
+        password,
+        confirmPassword,
+        recoveryQuestion,
+        recoveryAnswer,
+      });
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
@@ -79,6 +89,45 @@ export function SignupPage() {
               placeholder="Create a password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-white border border-gray-200"
+              required
+            />
+            <p className="text-xs text-gray-500">
+              Use at least 8 characters with letters and numbers.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="recoveryQuestion" className="text-sm text-gray-700">
+              Recovery Question
+            </Label>
+            <select
+              id="recoveryQuestion"
+              name="recoveryQuestion"
+              value={recoveryQuestion}
+              onChange={(e) => setRecoveryQuestion(e.target.value)}
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+              required
+            >
+              {recoveryQuestions.map((question) => (
+                <option key={question} value={question}>
+                  {question}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="recoveryAnswer" className="text-sm text-gray-700">
+              Recovery Answer
+            </Label>
+            <Input
+              id="recoveryAnswer"
+              name="recoveryAnswer"
+              type="text"
+              placeholder="Write the answer you will remember"
+              value={recoveryAnswer}
+              onChange={(e) => setRecoveryAnswer(e.target.value)}
               className="w-full bg-white border border-gray-200"
               required
             />

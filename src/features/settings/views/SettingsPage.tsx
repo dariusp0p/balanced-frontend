@@ -4,6 +4,8 @@ import { Bell, ChevronRight, LogOut, Moon, ScrollText, Shield } from "lucide-rea
 
 import { BottomNav } from "../../dashboard/views/components/BottomNav";
 import { TopNav } from "../../dashboard/views/components/TopNav";
+import { logout } from "../../auth/services/AuthManager";
+import { isAdminUser } from "../../auth/services/authSession";
 import { useFoodLogs } from "../../food/store/FoodLogContext";
 
 type SettingsItem = {
@@ -12,17 +14,6 @@ type SettingsItem = {
   Icon: typeof Bell;
   onClick?: () => void;
 };
-
-function isAdminUser() {
-  if (localStorage.getItem("isAdmin") === "true") return true;
-  try {
-    const raw = localStorage.getItem("currentUser");
-    if (!raw) return false;
-    return Boolean(JSON.parse(raw).admin);
-  } catch {
-    return false;
-  }
-}
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -107,7 +98,10 @@ export function SettingsPage() {
         <button
           type="button"
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-dark-blue px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-dark-blue/90"
-          onClick={() => navigate("/")}
+          onClick={() => {
+            logout();
+            navigate("/");
+          }}
         >
           <LogOut className="h-4 w-4" />
           <span>Log out</span>
